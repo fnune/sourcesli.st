@@ -17,12 +17,22 @@ Processing contains a binary that can be run periodically to download and struct
 
 ## Development
 
-A traditional Docker setup. To develop, run:
+This project uses Docker and Docker Compose to manage the development environment. To start all the services, run:
 
 ```sh
-docker-compose up
+docker compose up --build
 ```
+
+This will build the Docker images for each service and start them.
+
+The services are:
+
+- `frontend`: A web server serving the frontend application, available at `http://localhost:3000`.
+- `backend`: A Go API, available at `http://localhost:8080`.
+- `database`: A PostgreSQL database.
+- `processing`: A Go application for processing data.
 
 ### System requirements
 
 - Docker
+- Docker Compose

@@ -1,0 +1,26 @@
+- Building
+  - In one command I should be able to build something that can be deployed using Pulumi
+- Development
+  - In one command I should be able to set up a development environment
+  - The host machine should be completely unaffected
+    - That includes networking (ports etc.)
+      - You may decide to use podman instead of Docker for this, no problem
+  - The development environment should be able to implode without leaving a trace in the host machine
+  - The dependencies should be exactly the same as the production dependencies
+  - Static checks
+    - I should be able to lint the whole project with a single command
+    - I should be able to format the whole project with a single command
+    - Every development command that applies lints or formats should consistently have a fix variant
+    - There should be a way to lint and format every single git-checked file in the repo, including Markdown, shell scripts, etc.
+  - Development-only dependencies
+    - These should be installed using a Nix flake following best practices
+    - An `.envrc` file should be recommended but git-ignored, with `use flake` in it
+- Software and coding style
+  - Best practices should be used in every area of the codebase
+  - Tests should be prioritized and dependency injection should make testing easy
+  - Type safety should be strict at all times and in every aspect:
+    - No assertions or casting
+    - Parsing instead of validating Fully typed communication between services Either via generated types, or generated APIs... Comments should not be used unless it is very important to explain the "why" of a piece of code
+    - No comment should be included to explain the "what" or the "how" of code
+    - Code should always be self-evident so that there is no need for comments
+  - Technology choices should be boring and stable, except for Pulumi which is a requirement
