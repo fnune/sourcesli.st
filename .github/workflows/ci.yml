@@ -1,0 +1,76 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+# CI holds no tool versions of its own. Everything comes from flake.nix, so a
+# green run here means the same commands pass on a contributor's machine.
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: Run the baseline
+        run: nix flake check --print-build-logs
+      - name: Build the images
+        run: |
+          nix build .#images-web --print-build-logs
+          nix build .#images-ingest --print-build-logs
+  # The integration tests are skipped, not failed, without a database, so they
+  # need their own job with one attached. `nix flake check` cannot host this:
+  # its sandbox has no network and therefore no Postgres to reach.
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: sourceslist
+          POSTGRES_PASSWORD: devonly
+          POSTGRES_DB: sourceslist_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sourceslist" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: Run the integration tests
+        env:
+          TEST_DATABASE_URL: postgres://sourceslist:devonly@127.0.0.1:5432/sourceslist_test
+        run: nix develop --command go test ./... -count=1
+  generated:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      # Generated files are committed so that go:embed and the Nix build can
+      # reach them. That only stays honest if regenerating produces no diff.
+      - name: Regenerate and check for drift
+        run: |
+          nix develop --command sqlc generate
+          nix develop --command tailwindcss \
+            --input web/styles/app.css --output web/assets/app.css --minify
+          git diff --exit-code -- internal/store/query web/assets/app.css
+  vulnerabilities:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      # Not part of `nix flake check`: govulncheck reads its database over the
+      # network, which the Nix sandbox forbids, and a check that cannot reach
+      # its data always passes.
+      - name: Scan for known vulnerabilities
+        run: nix develop --command govulncheck ./...

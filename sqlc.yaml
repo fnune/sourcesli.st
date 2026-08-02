@@ -1,0 +1,24 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema: db/migrations
+    queries: db/queries
+    gen:
+      go:
+        package: query
+        out: internal/store/query
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_empty_slices: true
+        # pgx maps timestamptz to pgtype.Timestamptz by default, which every
+        # template would have to unwrap. Overriding the base type is enough:
+        # emit_pointers_for_null_types adds the pointer for nullable columns, so
+        # overriding the nullable case as well would produce **time.Time.
+        overrides:
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          - db_type: "timestamptz"
+            nullable: true
+            go_type: "time.Time"

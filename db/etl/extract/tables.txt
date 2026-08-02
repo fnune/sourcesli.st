@@ -1,0 +1,12 @@
+# UDD tables the extract step restores from the dump, one per line.
+#
+# Every table here costs restore time and scratch disk, so the list stays as
+# short as the transform queries allow. `pg_restore --table` is driven from
+# this file, which is why nothing else in the repository may name a UDD table
+# outside db/etl/transform.
+packages
+sources
+bugs
+bugs_tags
+archived_bugs
+popcon

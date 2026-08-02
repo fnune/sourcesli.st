@@ -1,0 +1,38 @@
+{{define "searchform"}}
+{{/*
+  The form works on its own: a real action, a real method, a real submit button.
+  htmx is layered on top with hx-get pointing at the same handler, so a reader
+  without JavaScript gets a full page of results rather than nothing.
+*/}}
+<form class="mt-6" action="/search" method="get" role="search">
+    <div class="flex flex-wrap gap-2">
+        <label class="sr-only" for="q">Package name or description</label>
+        <input
+            class="field flex-1 min-w-64"
+            type="search"
+            id="q"
+            name="q"
+            value="{{.Query}}"
+            placeholder="bash, text editor, libssl&hellip;"
+            autocomplete="off"
+            hx-get="/complete"
+            hx-trigger="input changed delay:150ms, focus"
+            hx-target="#completions"
+            hx-include="[name='suite']"
+            hx-sync="this:replace">
+
+        <label class="sr-only" for="suite">Suite</label>
+        <select class="field w-auto" id="suite" name="suite">
+            {{range .Suites}}
+            <option value="{{.Name}}" {{if eq .Name $.Suite}}selected{{end}}>
+                {{.Name}}{{if .Codename}} ({{.Codename}}){{end}}
+            </option>
+            {{end}}
+        </select>
+
+        <button class="rounded-md bg-neutral-900 px-4 py-2 text-white" type="submit">Search</button>
+    </div>
+
+    <div id="completions" class="relative"></div>
+</form>
+{{end}}

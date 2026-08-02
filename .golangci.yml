@@ -1,0 +1,43 @@
+version: "2"
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - forcetypeassert
+    - nilerr
+    - bodyclose
+    - rowserrcheck
+    - sqlclosecheck
+    - contextcheck
+    - noctx
+    - gosec
+    - revive
+    - misspell
+    - unconvert
+    - wastedassign
+    - godot
+  settings:
+    errcheck:
+      # Every error is handled. The whole point of the rule is that there is no
+      # list of functions whose failures do not matter.
+      check-type-assertions: true
+      check-blank: true
+    revive:
+      rules:
+        - name: exported
+        - name: context-as-argument
+        - name: error-return
+        - name: error-strings
+        - name: indent-error-flow
+  exclusions:
+    generated: lax
+    rules:
+      # Table-driven tests assert on values the test itself constructed, so the
+      # error paths a linter wants here have no failure mode to guard.
+      - path: _test\.go$
+        linters:
+          - gosec
+          - forcetypeassert
+formatters:
+  enable:
+    - gofumpt

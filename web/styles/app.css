@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+/* Tailwind v4 discovers utility classes by scanning sources declared here
+   rather than from a JavaScript config file, which is why this project needs no
+   tailwind.config.js and no npm. */
+@source "../templates";
+
+@theme {
+    --font-sans:
+        ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+    --font-mono:
+        ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas,
+        monospace;
+}
+
+/* The search field keeps its own focus ring rather than inheriting the browser
+   default, because the autocompletion panel below it needs the two to read as
+   one control. */
+@layer components {
+    .field {
+        @apply w-full rounded-md border border-neutral-300 bg-white px-3 py-2
+        text-neutral-900 outline-none;
+    }
+
+    .field:focus {
+        @apply border-neutral-500 ring-2 ring-neutral-200;
+    }
+}

@@ -1,0 +1,62 @@
+{{define "title"}}Which Debian image{{end}}
+
+{{define "content"}}
+<h1 class="text-2xl font-semibold">Which Debian image do you want?</h1>
+<p class="mt-1 text-neutral-600">Three questions, no Debian knowledge needed.</p>
+
+{{/*
+  A plain GET form: real action, real method, real submit button. htmx swaps the
+  recommendation in place when it is available, and without it the same handler
+  renders the whole page with the same answer.
+*/}}
+<form class="mt-6" action="/images" method="get"
+      hx-get="/images" hx-target="#recommendation" hx-select="#recommendation" hx-swap="outerHTML">
+
+    <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+            <label class="block text-sm font-medium" for="arch">What are you installing on?</label>
+            <select class="field mt-1" id="arch" name="arch">
+                {{range .Architectures}}
+                <option value="{{.Value}}" {{if eq (printf "%s" .Value) $.Choice.Architecture}}selected{{end}}>{{.Label}}</option>
+                {{end}}
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium" for="flavour">How do you want to install?</label>
+            <select class="field mt-1" id="flavour" name="flavour">
+                <option value="netinst" {{if eq $.Choice.Flavour "netinst"}}selected{{end}}>
+                    Install straight away, smallest download
+                </option>
+                <option value="live" {{if eq $.Choice.Flavour "live"}}selected{{end}}>
+                    Try it from a USB stick first
+                </option>
+                <option value="dvd" {{if eq $.Choice.Flavour "dvd"}}selected{{end}}>
+                    Install everything from the disc
+                </option>
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium" for="desktop">Which desktop?</label>
+            <select class="field mt-1" id="desktop" name="desktop">
+                {{range .Desktops}}
+                <option value="{{.Value}}" {{if eq (printf "%s" .Value) $.Choice.Desktop}}selected{{end}}>{{.Label}}</option>
+                {{end}}
+            </select>
+            <p class="mt-1 text-xs text-neutral-500">Live images only.</p>
+        </div>
+    </div>
+
+    <label class="mt-4 flex items-center gap-2 text-sm">
+        <input type="checkbox" name="offline" value="1" {{if .Choice.Offline}}checked{{end}}>
+        <span>No internet on the machine during installation</span>
+    </label>
+
+    <button class="mt-4 rounded-md bg-neutral-900 px-5 py-2.5 text-white" type="submit">
+        Show me the image
+    </button>
+</form>
+
+{{template "recommendation" .}}
+{{end}}
