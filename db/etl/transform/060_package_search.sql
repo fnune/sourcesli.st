@@ -29,6 +29,10 @@ LEFT JOIN popcon__new AS p ON p.package = b.name
 GROUP BY b.name, b.suite
 ON CONFLICT (name, kind, suite) DO NOTHING;
 
+-- Popcon counts installations of binary packages, so a source package's
+-- popularity is that of the most installed binary built from it. Joining the
+-- source name against popcon directly would leave every source whose binaries
+-- carry other names at zero.
 INSERT INTO package_search__new (
     name, kind, suite, version, synopsis, popularity, document
 )
@@ -38,9 +42,17 @@ SELECT
     s.suite,
     max(s.version),
     '',
-    coalesce(max(p.installed), 0),
+    coalesce(max(bp.installed), 0),
     to_tsvector('english', s.name)
 FROM source_packages__new AS s
-LEFT JOIN popcon__new AS p ON p.package = s.name
+LEFT JOIN (
+    SELECT
+        b.source_name,
+        b.suite,
+        max(p.installed) AS installed
+    FROM binary_packages__new AS b
+    INNER JOIN popcon__new AS p ON p.package = b.name
+    GROUP BY b.source_name, b.suite
+) AS bp ON bp.source_name = s.name AND bp.suite = s.suite
 GROUP BY s.name, s.suite
 ON CONFLICT (name, kind, suite) DO NOTHING;

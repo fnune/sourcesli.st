@@ -18,7 +18,11 @@ import (
 // stagingSuffix names the table a batch is built in before it is published.
 const stagingSuffix = "__new"
 
-// retiredSuffix names the outgoing table during the moment of the swap.
+// retiredSuffix named the outgoing table in an earlier swap design that renamed
+// it aside and dropped it after commit. A crash between commit and drop left
+// the table behind and broke every later run, so the swap now drops inside the
+// transaction. The constant survives only to clean up what that design may
+// have left.
 const retiredSuffix = "__old"
 
 // replaceableTables are rebuilt wholesale by every run, in the order the
@@ -219,6 +223,10 @@ func (l *Loader) transform(ctx context.Context) error {
 
 // swap publishes every staged table at once and clears the freshness overlay,
 // which described versions that the incoming batch now supersedes.
+//
+// Everything happens inside one transaction, including dropping the outgoing
+// tables: a crash at any point either publishes the whole batch or none of it,
+// and can leave nothing behind for the next run to trip over.
 func (l *Loader) swap(ctx context.Context) (int64, error) {
 	tx, err := l.pool.Begin(ctx)
 	if err != nil {
@@ -241,11 +249,17 @@ func (l *Loader) swap(ctx context.Context) (int64, error) {
 		}
 		total += count
 
-		if _, err := tx.Exec(ctx, fmt.Sprintf(`ALTER TABLE %s RENAME TO %s`, table, retired)); err != nil {
+		if _, err := tx.Exec(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS %s CASCADE`, retired)); err != nil {
+			return 0, fmt.Errorf("dropping a leftover %s: %w", retired, err)
+		}
+		if _, err := tx.Exec(ctx, fmt.Sprintf(`DROP TABLE %s CASCADE`, table)); err != nil {
 			return 0, fmt.Errorf("retiring %s: %w", table, err)
 		}
 		if _, err := tx.Exec(ctx, fmt.Sprintf(`ALTER TABLE %s RENAME TO %s`, staging, table)); err != nil {
 			return 0, fmt.Errorf("publishing %s: %w", staging, err)
+		}
+		if err := renameStagedIndexes(ctx, tx, table); err != nil {
+			return 0, err
 		}
 	}
 
@@ -257,14 +271,45 @@ func (l *Loader) swap(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 
-	for _, table := range replaceableTables {
-		retired := table + retiredSuffix
-		if _, err := l.pool.Exec(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS %s CASCADE`, retired)); err != nil {
-			return 0, fmt.Errorf("dropping %s after the swap: %w", retired, err)
+	return total, nil
+}
+
+// renameStagedIndexes strips the staging suffix from the index names a
+// published table carries. Renaming a table does not rename its indexes, so
+// without this every swap would leave the live table with indexes named after
+// the staging table, drifting further each run.
+func renameStagedIndexes(ctx context.Context, tx pgx.Tx, table string) error {
+	rows, err := tx.Query(ctx,
+		`SELECT indexname FROM pg_indexes
+		 WHERE schemaname = current_schema() AND tablename = $1 AND strpos(indexname, $2) > 0`,
+		table, stagingSuffix)
+	if err != nil {
+		return fmt.Errorf("listing indexes on %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return fmt.Errorf("listing indexes on %s: %w", table, err)
 		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("listing indexes on %s: %w", table, err)
 	}
 
-	return total, nil
+	for _, name := range names {
+		canonical := strings.ReplaceAll(name, stagingSuffix, "")
+		if !safeIdentifier.MatchString(name) || !safeIdentifier.MatchString(canonical) {
+			return fmt.Errorf("refusing to rename index %q", name)
+		}
+		if _, err := tx.Exec(ctx, fmt.Sprintf(`ALTER INDEX %s RENAME TO %s`, name, canonical)); err != nil {
+			return fmt.Errorf("renaming index %s: %w", name, err)
+		}
+	}
+	return nil
 }
 
 type sqlStatement struct {

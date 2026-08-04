@@ -176,12 +176,9 @@ func (s *DumpSource) fetch(ctx context.Context, state UpstreamState) (Snapshot, 
 
 	switch response.StatusCode {
 	case http.StatusNotModified:
-		if _, err := os.Stat(cached); err != nil {
-			return Snapshot{}, "", fmt.Errorf(
-				"upstream reports the dump unchanged but %s is missing, so the recorded state is a lie: %w",
-				cached, err,
-			)
-		}
+		// Nothing is restored on a 304: the previously published data already
+		// lives in Postgres, so the cached file is not needed and its absence
+		// (an ephemeral cache directory, say) must not fail the run.
 		return Snapshot{}, "", ErrUnchanged
 	case http.StatusOK:
 	default:

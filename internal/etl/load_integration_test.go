@@ -390,6 +390,89 @@ func TestLoadLeavesNoStagingTables(t *testing.T) {
 	}
 }
 
+// Popcon counts binary installations, so a source package whose binaries carry
+// other names would score zero if its name were joined against popcon directly.
+func TestLoadDerivesSourcePopularityFromItsBinaries(t *testing.T) {
+	pool := requireDatabase(t)
+	migrateFresh(t, pool)
+	seedUpstream(t, pool)
+
+	statements := []string{
+		`INSERT INTO udd_raw.sources (source, version, maintainer_name, distribution, release, component)
+		 VALUES ('srconly', '1.0-1', 'A Maintainer', 'debian', 'sid', 'main')`,
+		`INSERT INTO udd_raw.packages
+			(package, version, architecture, source, description, distribution, release, component, section)
+		 VALUES ('srconly-bin', '1.0-1', 'amd64', 'srconly', 'built from srconly', 'debian', 'sid', 'main', 'misc')`,
+		`INSERT INTO udd_raw.popcon (package, insts, vote, recent) VALUES ('srconly-bin', 4242, 10, 5)`,
+	}
+	for _, statement := range statements {
+		if _, err := pool.Exec(t.Context(), statement); err != nil {
+			t.Fatalf("seeding the source-only package: %v", err)
+		}
+	}
+
+	if _, err := newLoader(t, pool).Load(t.Context()); err != nil {
+		t.Fatalf("loading: %v", err)
+	}
+
+	var popularity int
+	err := pool.QueryRow(
+		t.Context(),
+		`SELECT popularity FROM package_search WHERE name = 'srconly' AND kind = 'source' AND suite = 'unstable'`,
+	).Scan(&popularity)
+	if err != nil {
+		t.Fatalf("reading the source search row: %v", err)
+	}
+	if popularity != 4242 {
+		t.Errorf("source popularity = %d, want 4242 from its binary's popcon", popularity)
+	}
+}
+
+// Renaming a table does not rename its indexes, so without the explicit rename
+// in the swap every load would leave live tables with staging-named indexes.
+func TestLoadLeavesNoStagingIndexNames(t *testing.T) {
+	pool := requireDatabase(t)
+	migrateFresh(t, pool)
+	seedUpstream(t, pool)
+
+	loader := newLoader(t, pool)
+	for range 2 {
+		if _, err := loader.Load(t.Context()); err != nil {
+			t.Fatalf("loading: %v", err)
+		}
+	}
+
+	leftovers := count(t, pool, `SELECT count(*) FROM pg_indexes
+		WHERE schemaname = 'public' AND indexname LIKE '%\_\_new%'`)
+	if leftovers != 0 {
+		t.Errorf("%d indexes still carry a staging name after the swap", leftovers)
+	}
+}
+
+// An earlier swap design renamed outgoing tables to `<table>__old` and dropped
+// them after commit, so a crash in the gap left a table behind that made every
+// later run fail. The swap must clean such leftovers up rather than trip over
+// them.
+func TestLoadSurvivesALeftoverRetiredTable(t *testing.T) {
+	pool := requireDatabase(t)
+	migrateFresh(t, pool)
+	seedUpstream(t, pool)
+
+	if _, err := pool.Exec(t.Context(), `CREATE TABLE bugs__old (LIKE bugs INCLUDING ALL)`); err != nil {
+		t.Fatalf("planting a leftover retired table: %v", err)
+	}
+
+	if _, err := newLoader(t, pool).Load(t.Context()); err != nil {
+		t.Fatalf("loading over a leftover retired table: %v", err)
+	}
+
+	leftovers := count(t, pool, `SELECT count(*) FROM pg_tables
+		WHERE schemaname = 'public' AND tablename LIKE '%\_\_old'`)
+	if leftovers != 0 {
+		t.Errorf("%d retired tables left behind", leftovers)
+	}
+}
+
 func TestMigrateIsIdempotent(t *testing.T) {
 	pool := requireDatabase(t)
 	migrateFresh(t, pool)
