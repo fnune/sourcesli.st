@@ -15,7 +15,7 @@ buildGoModule {
   # Update with the hash Nix prints when go.mod changes. It pins the dependency
   # closure independently of the module proxy, so a build cannot be changed by
   # anything happening upstream after the fact.
-  vendorHash = "sha256-904l7LfgjynBGYgWNeM2ltHuquifgNQWfWzoXiXAoHM=";
+  vendorHash = "sha256-cGjK1/nM7/txqGuTmcfLdZnsnj5CUjxbnwm212y2uhg=";
 
   env.CGO_ENABLED = 0;
 
