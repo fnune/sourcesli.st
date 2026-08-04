@@ -2,7 +2,7 @@
 
 Status: accepted, tier 2 not yet implemented
 
-Tier 1 is live. Of tier 2 only the read side exists: the `fresh_binary_versions` overlay, the web tier reading it with priority, and the truncation on every bulk load. The `apt-get update` container that writes it has not been built, so until it is, package versions are at dump freshness and the site says so.
+Tier 1 is live. Of tier 2 only the read side exists: the overlay table, the web tier reading it first, and the truncation on every bulk load. Until the writer is built, package versions stay at dump freshness and the site says so.
 
 Builds on [0001](0001-source-bulk-data-from-udd.md).
 

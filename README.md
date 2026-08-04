@@ -18,9 +18,7 @@ udd.debian.org/dumps/udd.dump ──(conditional GET, every two days)──> ing
 - **our Postgres** holds everything the site serves, including the search and autocompletion indexes.
 - **web** is a Go server rendering HTML. It reads only from our database.
 
-We deliberately use the published dump rather than UDD's read-only mirror. A static file costs Debian the same no matter how badly we write our code; a query against the shared mirror spends CPU and connections that other people are waiting on. The mirror is for humans exploring interactively, and nothing automated touches it.
-
-The property that matters: a user request never causes a request to a Debian service. Upstream load is constant whether the site has ten visitors or ten million. See [decision record 0001](engineering/decisions/0001-source-bulk-data-from-udd.md) for why this rules out the more obvious approaches, and the Debian data citizenship section of the [engineering principles](engineering/README.md) for the rules ingest follows.
+The property that matters: a user request never causes a request to a Debian service, so upstream load stays constant whether the site has ten visitors or ten million. [Decision record 0001](engineering/decisions/0001-source-bulk-data-from-udd.md) explains why the dump beats every other source, and the [engineering principles](engineering/README.md) hold the rules ingest follows.
 
 ## Architecture
 
@@ -48,9 +46,10 @@ nix/               package, images, checks, dev environment
 ### Pages
 
 - `/` and `/search` search binary and source packages, with htmx autocompletion over a form that works without it.
-- `/p/{suite}/{name}` shows versions per architecture, the source package, and open bugs.
+- `/p/{suite}/{name}` shows versions per architecture, dependencies, the source package, and bugs filterable by status and severity. Source-only packages get the same page built from their source record.
 - `/b/{number}` shows one bug and links to the BTS for its live state.
 - `/images` is the ISO chooser. It contacts nothing: the recommendation is derived from the answers and Debian's stable directory layout.
+- `/healthz` answers 200 while the database is reachable. An empty database is healthy; an unreachable one is not.
 
 ## Development
 
@@ -79,18 +78,31 @@ nix run .#dev-down
 ### Checks
 
 ```sh
-nix fmt           # format every git-checked file: Go, Nix, Markdown, YAML, shell
-nix flake check   # format check, lint, vulnerability scan, tests
+nix fmt           # format everything: Go, Nix, shell, YAML, TOML, SQL
+nix flake check   # format check, lint, tests; exactly what CI runs
 ```
 
-`nix flake check` is exactly what CI runs. Inside the dev shell, `go test ./...` and `golangci-lint run` work as usual for a tighter loop.
+Inside the dev shell, `go test ./...` and `golangci-lint run` work as usual for a tighter loop.
 
-Tests come at three levels. The domain and the ISO chooser are pure and always run. The handler tests exercise the real router, the real templates, and real rendering against an in-memory fake of the query interface. The ETL tests need a real Postgres and are skipped without one, because the things most likely to be wrong there are the things a fake cannot have an opinion about: whether the transform SQL is valid, whether the rebuilt indexes are usable, and whether the rename swap actually publishes.
+Tests come at three levels: pure tests for the domain and the ISO chooser, handler tests against the real router and templates with a fake query layer, and ETL tests against a real Postgres. The ETL tests are skipped without a database, because what they check is what a fake cannot judge: that the transform SQL runs, the indexes rebuild, and the swap publishes.
 
 ```sh
 export TEST_DATABASE_URL='postgres://user@host/database'
 go test ./... -count=1
 ```
+
+Any Postgres with the `pg_trgm` and `postgres_fdw` extensions works. The tests drop and recreate the `public` schema, so point them at a disposable database.
+
+### Generated files
+
+`internal/store/query` (sqlc, from `db/queries`) and `web/assets/app.css` (Tailwind, from `web/styles` and the templates) are committed tool output: `go:embed` cannot reach a file that is not there. After changing their inputs, regenerate inside the dev shell:
+
+```sh
+sqlc generate
+tailwindcss --input web/styles/app.css --output web/assets/app.css --minify
+```
+
+CI regenerates both and fails on any diff. The formatter excludes them, so they stay byte-exact tool output.
 
 ### Data
 
@@ -114,6 +126,22 @@ nix build .#images-ingest   # 64 MB: adds the Postgres client tools the restore 
 ```
 
 Neither image contains a shell or a package manager.
+
+### Configuration
+
+Both binaries read the environment and refuse to start when anything required is missing.
+
+| Variable | Binary | Meaning |
+| --- | --- | --- |
+| `DATABASE_URL` | both | Postgres connection string. The web tier needs only a read-only role; ingest owns every write. |
+| `LISTEN_ADDRESS` | web | Defaults to `127.0.0.1:8080`. |
+| `UDD_DUMP_URL` | ingest | Where the UDD dump is published. Deliberately no default. |
+| `UDD_CACHE_DIR` | ingest | Where the downloaded dump lives between runs. Losing it is harmless. |
+| `UDD_SCRATCH_DATABASE` | ingest | Database the dump restores into. Dropped and recreated every run. |
+
+The ingest role must be able to create and drop the scratch database, create the `pg_trgm` and `postgres_fdw` extensions, and define a foreign server. Grant exactly that; do not run it as a superuser for convenience.
+
+Ingest is a job, not a service. Scheduling, retries, and backoff belong to whatever runs it, never faster than upstream publishes.
 
 ## Contributing
 

@@ -13,14 +13,14 @@ What the project has to do, and the constraints it has to do it under. Principle
 
 ### Bug browsing
 
-- Search and filter bugs by package, severity, status, and tag. Not yet implemented as a standalone page; the package page filters its own bugs by severity and status, and the rest is planned.
+- Search and filter bugs by package, severity, status, and tag. Not yet implemented as its own page; the package page filters by severity and status, the rest is planned.
 - A bug page shows the metadata UDD carries and links to the BTS for the full log.
 
 ### ISO chooser
 
 - Answer the question "which Debian image do I actually want" without requiring prior knowledge of Debian's release and media structure.
 - Cover architecture, installer type, desktop environment, and whether non-free firmware is needed.
-- Produce a link to the right download directory plus the exact filename pattern to look for, and the matching checksum and signature so verification is possible. The directory rather than the file itself, because point releases rename the file every few months and a pattern cannot go stale into a broken link.
+- Produce the right download directory, the filename pattern to look for, and the matching checksum and signature. The directory rather than the file, because point releases rename the file and a pattern cannot go stale into a broken link.
 - This is the part of the product with no good existing alternative, so it earns the most attention.
 
 ### Non-goals
@@ -55,7 +55,7 @@ Hard requirements, not preferences. Expanded in the Debian data citizenship sect
 ## Static checks
 
 - One command lints the whole project. One command formats it.
-- Both cover every git-checked file, not only Go: Markdown, Nix, YAML, and shell included.
+- Both cover every file type the toolchain has a formatter for, not only Go: Nix, YAML, TOML, shell, and SQL included.
 - Every checking command has a fix variant.
 - Local and CI invocations are the same command.
 
