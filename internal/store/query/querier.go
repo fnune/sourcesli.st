@@ -9,9 +9,10 @@ import (
 )
 
 type Querier interface {
-	// Autocompletion. Prefix matching first because that is what a reader typing a
-	// name expects, with trigram similarity as the tiebreak so a typo still finds
-	// something. LIMIT is small: this runs on every keystroke.
+	// Autocompletion. Prefix matches come first because that is what a reader
+	// typing a name expects; trigram similarity fills what remains so a typo still
+	// finds something. Each half is served by its own index and the LIMIT is
+	// small: this runs on every keystroke.
 	CompletePackageNames(ctx context.Context, arg CompletePackageNamesParams) ([]CompletePackageNamesRow, error)
 	CountOpenBugsForPackage(ctx context.Context, package_ string) (int64, error)
 	// Every architecture and version of one binary package in one suite.
@@ -26,8 +27,10 @@ type Querier interface {
 	ListBugTags(ctx context.Context, bugNumber int32) ([]string, error)
 	// Bugs against a binary package or its source, most severe first.
 	//
-	// Archived bugs are excluded by default because a package page is about the
-	// present. The partial indexes in db/migrations cover exactly this predicate.
+	// Archived bugs are excluded because a package page is about the present. The
+	// partial indexes in db/migrations cover exactly this predicate. Status and
+	// severity are optional filters where the empty string means "any"; status is
+	// otherwise 'open' or 'closed'.
 	ListBugsForPackage(ctx context.Context, arg ListBugsForPackageParams) ([]ListBugsForPackageRow, error)
 	ListSuites(ctx context.Context) ([]Suite, error)
 	// Queries the web tier runs. Every one is bounded and served by an index

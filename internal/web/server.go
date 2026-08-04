@@ -83,7 +83,7 @@ func NewServer(queries Queries, templates, assets fs.FS, logger *slog.Logger) (*
 		pages[page] = parsed
 	}
 
-	fragments, err := template.New("fragments").ParseFS(templates, "results.html", "complete.html")
+	fragments, err := template.New("fragments").ParseFS(templates, "complete.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing fragment templates: %w", err)
 	}
@@ -121,20 +121,25 @@ type layoutData struct {
 
 type searchData struct {
 	layoutData
-	Results []query.SearchPackagesRow
+	Results   []query.SearchPackagesRow
+	Truncated bool
 }
 
 type packageData struct {
 	layoutData
-	Name         string
-	SourceName   string
-	Synopsis     string
-	Description  string
-	Binaries     []query.GetBinaryPackageRow
-	Source       *query.SourcePackage
-	Fresh        *query.GetFreshVersionRow
-	Bugs         []bugSummary
-	OpenBugCount int64
+	Name          string
+	SourceName    string
+	Synopsis      string
+	Description   string
+	Binaries      []query.GetBinaryPackageRow
+	Source        *query.SourcePackage
+	Fresh         *query.GetFreshVersionRow
+	Bugs          []bugSummary
+	OpenBugCount  int64
+	BugStatus     string
+	BugSeverity   string
+	Severities    []domain.Severity
+	BugsTruncated bool
 }
 
 type bugSummary struct {
@@ -198,14 +203,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		data.Results = results
+		data.Truncated = len(results) == searchResultLimit
 	}
 
-	// htmx asks for the results list alone; everything else gets a whole page.
-	// Both come from the same template, so the two paths cannot drift.
-	if r.Header.Get("HX-Request") == "true" {
-		s.renderFragment(w, r, "results", data)
-		return
-	}
 	s.render(w, r, "search.html", http.StatusOK, data)
 }
 
@@ -215,9 +215,9 @@ func (s *Server) handleComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name, err := domain.ParsePackageName(prefix)
+	name, err := domain.ParsePackageNamePrefix(prefix)
 	if err != nil {
-		// A prefix that cannot become a package name simply has no completions.
+		// A prefix no package name could start with simply has no completions.
 		// This is a half-typed query, not a client error worth reporting.
 		return
 	}
@@ -260,23 +260,25 @@ func (s *Server) handlePackage(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, fmt.Errorf("reading binary package %s: %w", name, err))
 		return
 	}
-	if len(binaries) == 0 {
-		s.notFound(w, r, fmt.Sprintf("No package named %s in %s", name, suite),
-			"It may exist in another suite, or it may have been removed from the archive.")
-		return
-	}
 
 	data := packageData{
-		layoutData:  layout,
-		Name:        name.String(),
-		SourceName:  binaries[0].SourceName,
-		Synopsis:    binaries[0].Synopsis,
-		Description: binaries[0].Description,
-		Binaries:    binaries,
+		layoutData: layout,
+		Name:       name.String(),
+		SourceName: name.String(),
+		Severities: domain.Severities(),
+	}
+	if len(binaries) > 0 {
+		data.SourceName = binaries[0].SourceName
+		data.Synopsis = binaries[0].Synopsis
+		data.Description = binaries[0].Description
+		data.Binaries = binaries
 	}
 
+	// Search offers source packages too, and a source whose binaries all carry
+	// other names has no binary rows under its own name. Its page is the source
+	// record; only a name that is neither is not found.
 	if source, err := s.queries.GetSourcePackage(r.Context(), query.GetSourcePackageParams{
-		Name:  binaries[0].SourceName,
+		Name:  data.SourceName,
 		Suite: suite,
 	}); err == nil {
 		data.Source = &source
@@ -284,27 +286,41 @@ func (s *Server) handlePackage(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, fmt.Errorf("reading source package: %w", err))
 		return
 	}
-
-	if fresh, err := s.queries.GetFreshVersion(r.Context(), query.GetFreshVersionParams{
-		Name:         name.String(),
-		Suite:        suite,
-		Architecture: binaries[0].Architecture,
-	}); err == nil {
-		data.Fresh = &fresh
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		s.serverError(w, r, fmt.Errorf("reading the freshness overlay: %w", err))
+	if len(binaries) == 0 && data.Source == nil {
+		s.notFound(w, r, fmt.Sprintf("No package named %s in %s", name, suite),
+			"It may exist in another suite, or it may have been removed from the archive.")
 		return
 	}
 
+	if len(binaries) > 0 {
+		if fresh, err := s.queries.GetFreshVersion(r.Context(), query.GetFreshVersionParams{
+			Name:         name.String(),
+			Suite:        suite,
+			Architecture: preferredArchitecture(binaries),
+		}); err == nil {
+			data.Fresh = &fresh
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			s.serverError(w, r, fmt.Errorf("reading the freshness overlay: %w", err))
+			return
+		}
+	}
+
+	data.BugStatus, data.BugSeverity = bugFilter(r)
+	status := data.BugStatus
+	if status == "all" {
+		status = ""
+	}
 	bugs, err := s.queries.ListBugsForPackage(r.Context(), query.ListBugsForPackageParams{
 		Name:       name.String(),
-		OnlyOpen:   true,
+		Status:     status,
+		Severity:   data.BugSeverity,
 		MaxResults: bugListLimit,
 	})
 	if err != nil {
 		s.serverError(w, r, fmt.Errorf("listing bugs for %s: %w", name, err))
 		return
 	}
+	data.BugsTruncated = len(bugs) == bugListLimit
 	for _, bug := range bugs {
 		// An unrecognised severity is upstream telling us something changed. It
 		// is not worth failing a page over, but it must not pass unnoticed.
@@ -442,6 +458,34 @@ func (s *Server) layout(r *http.Request, searchQuery string) (layoutData, error)
 	}
 
 	return data, nil
+}
+
+// preferredArchitecture picks the architecture the freshness overlay is read
+// for: amd64 because it is what most readers run, then "all" for
+// architecture-independent packages, then whatever is listed first.
+func preferredArchitecture(binaries []query.GetBinaryPackageRow) string {
+	for _, want := range []string{"amd64", "all"} {
+		for _, binary := range binaries {
+			if binary.Architecture == want {
+				return want
+			}
+		}
+	}
+	return binaries[0].Architecture
+}
+
+// bugFilter reads the bug list filters from the URL. Anything unrecognised
+// falls back to the default view rather than erroring: these arrive from typed
+// URLs as well as from the form.
+func bugFilter(r *http.Request) (status, severity string) {
+	status = r.URL.Query().Get("bugs")
+	if status != "closed" && status != "all" {
+		status = "open"
+	}
+	if parsed, err := domain.ParseSeverity(r.URL.Query().Get("severity")); err == nil {
+		severity = parsed.String()
+	}
+	return status, severity
 }
 
 // suiteOrDefault falls back to unstable, which is where a reader looking for

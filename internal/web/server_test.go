@@ -153,25 +153,21 @@ func TestSearchRendersResults(t *testing.T) {
 	}
 }
 
-// The htmx path and the full-page path must render the same list from the same
-// template, so a fragment cannot drift away from the page it replaces.
-func TestSearchReturnsAFragmentToHtmx(t *testing.T) {
+// The result limit exists, so hitting it has to be said out loud: a list that
+// stops at 50 with no comment reads as "that is everything".
+func TestSearchSaysWhenResultsAreTruncated(t *testing.T) {
 	t.Parallel()
 
-	handler := newTestServer(t, populatedQueries())
-
-	full := get(t, handler, "/search?q=bash&suite=unstable", nil).Body.String()
-	fragment := get(t, handler, "/search?q=bash&suite=unstable",
-		map[string]string{"HX-Request": "true"}).Body.String()
-
-	if strings.Contains(fragment, "<!DOCTYPE html>") {
-		t.Error("the htmx response should be a fragment, not a whole document")
+	queries := populatedQueries()
+	queries.search = make([]query.SearchPackagesRow, 50)
+	for i := range queries.search {
+		queries.search[i] = query.SearchPackagesRow{Name: "bash", Kind: "binary", Suite: "unstable"}
 	}
-	if !strings.Contains(fragment, `href="/p/unstable/bash"`) {
-		t.Error("the fragment should contain the results")
-	}
-	if !strings.Contains(full, "<!DOCTYPE html>") {
-		t.Error("a normal request should get a whole document")
+
+	response := get(t, newTestServer(t, queries), "/search?q=bash&suite=unstable", nil)
+
+	if !strings.Contains(response.Body.String(), "Only the first 50 matches are shown") {
+		t.Error("a full page of results should say it is truncated")
 	}
 }
 
@@ -199,6 +195,21 @@ func TestCompletionReturnsLinks(t *testing.T) {
 	}
 	if !strings.Contains(response.Body.String(), `href="/p/unstable/bash"`) {
 		t.Error("completions should link to package pages")
+	}
+}
+
+// One character is a legitimate prefix although not a legitimate package name,
+// and completion must start on the first keystroke.
+func TestCompletionAcceptsASingleCharacter(t *testing.T) {
+	t.Parallel()
+
+	response := get(t, newTestServer(t, populatedQueries()), "/complete?q=b&suite=unstable", nil)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
+	}
+	if !strings.Contains(response.Body.String(), `href="/p/unstable/bash"`) {
+		t.Error("a single-character prefix should complete")
 	}
 }
 
@@ -266,6 +277,101 @@ func TestPackagePageWithNoSourceStillRenders(t *testing.T) {
 	}
 }
 
+// Search offers source packages too. A source whose binaries all carry other
+// names has no binary rows under its own name, and its page is the source
+// record rather than a 404.
+func TestSourceOnlyPackageRendersFromItsSourceRecord(t *testing.T) {
+	t.Parallel()
+
+	queries := populatedQueries()
+	queries.sources["srconly"] = query.SourcePackage{
+		Name: "srconly", Version: "1.0-1", Suite: "unstable", MaintainerName: "A Maintainer",
+	}
+
+	response := get(t, newTestServer(t, queries), "/p/unstable/srconly", nil)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 for a source-only package", response.Code)
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, "A Maintainer") {
+		t.Error("the page should render the source record")
+	}
+	if !strings.Contains(body, "No binary packages in this suite") {
+		t.Error("the page should say there are no binaries rather than imply an empty archive")
+	}
+}
+
+func TestPackagePageShowsDependencies(t *testing.T) {
+	t.Parallel()
+
+	queries := populatedQueries()
+	rows := queries.binaries["bash"]
+	rows[0].Depends = "base-files (>= 2.1.12), debianutils (>= 5.6-0.1)"
+	rows[0].Recommends = "bash-completion"
+
+	body := get(t, newTestServer(t, queries), "/p/unstable/bash", nil).Body.String()
+
+	for _, want := range []string{"Dependencies", "base-files (&gt;= 2.1.12)", "bash-completion"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("package page does not contain %q", want)
+		}
+	}
+}
+
+func TestPackagePageLinksTheOtherSuites(t *testing.T) {
+	t.Parallel()
+
+	body := get(t, newTestServer(t, populatedQueries()), "/p/unstable/bash", nil).Body.String()
+
+	if !strings.Contains(body, `href="/p/stable/bash"`) {
+		t.Error("the package page should link the package in the other suites")
+	}
+}
+
+func TestPackagePageBugFiltersReachTheQuery(t *testing.T) {
+	t.Parallel()
+
+	queries := populatedQueries()
+	get(t, newTestServer(t, queries), "/p/unstable/bash?bugs=closed&severity=grave", nil)
+
+	if queries.bugsCalledWith.Status != "closed" || queries.bugsCalledWith.Severity != "grave" {
+		t.Errorf("bugs listed with %+v, want the status and severity from the URL", queries.bugsCalledWith)
+	}
+}
+
+// The default view is open bugs: a package page is about the present, and an
+// unfiltered dump of every closed bug would bury it.
+func TestPackagePageBugsDefaultToOpen(t *testing.T) {
+	t.Parallel()
+
+	queries := populatedQueries()
+	get(t, newTestServer(t, queries), "/p/unstable/bash", nil)
+
+	if queries.bugsCalledWith.Status != "open" {
+		t.Errorf("default bug status = %q, want open", queries.bugsCalledWith.Status)
+	}
+	if queries.bugsCalledWith.Severity != "" {
+		t.Errorf("default bug severity = %q, want unfiltered", queries.bugsCalledWith.Severity)
+	}
+}
+
+func TestPackagePageSaysWhenBugsAreTruncated(t *testing.T) {
+	t.Parallel()
+
+	queries := populatedQueries()
+	queries.bugList = make([]query.ListBugsForPackageRow, 25)
+	for i := range queries.bugList {
+		queries.bugList[i] = query.ListBugsForPackageRow{Number: int32(i + 1), Severity: "normal"}
+	}
+
+	body := get(t, newTestServer(t, queries), "/p/unstable/bash", nil).Body.String()
+
+	if !strings.Contains(body, "Showing the first 25 matches") {
+		t.Error("a full page of bugs should say it is truncated")
+	}
+}
+
 func TestUnknownPackageIsNotFound(t *testing.T) {
 	t.Parallel()
 
@@ -312,6 +418,18 @@ func TestBugPageRenders(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("bug page does not contain %q", want)
 		}
+	}
+}
+
+// The reader's suite has to survive the trip through a bug page rather than
+// being reset to unstable by a hard-coded link.
+func TestBugPageKeepsTheReadersSuite(t *testing.T) {
+	t.Parallel()
+
+	response := get(t, newTestServer(t, populatedQueries()), "/b/1136390?suite=stable", nil)
+
+	if !strings.Contains(response.Body.String(), `href="/p/stable/bash"`) {
+		t.Error("the package link should carry the suite the reader came with")
 	}
 }
 

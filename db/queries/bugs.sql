@@ -1,8 +1,10 @@
 -- name: ListBugsForPackage :many
 -- Bugs against a binary package or its source, most severe first.
 --
--- Archived bugs are excluded by default because a package page is about the
--- present. The partial indexes in db/migrations cover exactly this predicate.
+-- Archived bugs are excluded because a package page is about the present. The
+-- partial indexes in db/migrations cover exactly this predicate. Status and
+-- severity are optional filters where the empty string means "any"; status is
+-- otherwise 'open' or 'closed'.
 SELECT
     number,
     package,
@@ -21,7 +23,8 @@ FROM bugs
 WHERE
     NOT archived
     AND (package = sqlc.arg(name) OR source = sqlc.arg(name))
-    AND (NOT sqlc.arg(only_open)::boolean OR NOT done)
+    AND (sqlc.arg(status)::text = '' OR done = (sqlc.arg(status)::text = 'closed'))
+    AND (sqlc.arg(severity)::text = '' OR severity = sqlc.arg(severity)::text)
 ORDER BY
     CASE severity
         WHEN 'critical' THEN 0

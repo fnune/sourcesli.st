@@ -1,8 +1,9 @@
 {{define "searchform"}}
 {{/*
   The form works on its own: a real action, a real method, a real submit button.
-  htmx is layered on top with hx-get pointing at the same handler, so a reader
-  without JavaScript gets a full page of results rather than nothing.
+  htmx is layered on the input alone, fetching autocompletion from /complete;
+  without JavaScript the form still submits to /search for a full page of
+  results.
 */}}
 <form class="mt-6" action="/search" method="get" role="search">
     <div class="flex flex-wrap gap-2">

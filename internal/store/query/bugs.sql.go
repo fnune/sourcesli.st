@@ -117,7 +117,8 @@ FROM bugs
 WHERE
     NOT archived
     AND (package = $1 OR source = $1)
-    AND (NOT $2::boolean OR NOT done)
+    AND ($2::text = '' OR done = ($2::text = 'closed'))
+    AND ($3::text = '' OR severity = $3::text)
 ORDER BY
     CASE severity
         WHEN 'critical' THEN 0
@@ -130,12 +131,13 @@ ORDER BY
         ELSE 7
     END ASC,
     number DESC
-LIMIT $3
+LIMIT $4
 `
 
 type ListBugsForPackageParams struct {
 	Name       string
-	OnlyOpen   bool
+	Status     string
+	Severity   string
 	MaxResults int32
 }
 
@@ -157,10 +159,18 @@ type ListBugsForPackageRow struct {
 
 // Bugs against a binary package or its source, most severe first.
 //
-// Archived bugs are excluded by default because a package page is about the
-// present. The partial indexes in db/migrations cover exactly this predicate.
+// Archived bugs are excluded because a package page is about the present. The
+// partial indexes in db/migrations cover exactly this predicate. Status and
+// severity are optional filters where the empty string means "any"; status is
+// otherwise 'open' or 'closed'.
 func (q *Queries) ListBugsForPackage(ctx context.Context, arg ListBugsForPackageParams) ([]ListBugsForPackageRow, error) {
-	rows, err := q.db.Query(ctx, listBugsForPackage, arg.Name, arg.OnlyOpen, arg.MaxResults)
+	rows, err := q.db.Query(
+		ctx, listBugsForPackage,
+		arg.Name,
+		arg.Status,
+		arg.Severity,
+		arg.MaxResults,
+	)
 	if err != nil {
 		return nil, err
 	}

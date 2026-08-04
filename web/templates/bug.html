@@ -15,7 +15,7 @@
     <dt class="text-neutral-500">Status</dt><dd>{{.Bug.Status}}</dd>
     {{if .Bug.Package}}
     <dt class="text-neutral-500">Package</dt>
-    <dd><a class="font-mono underline" href="/p/unstable/{{.Bug.Package}}">{{.Bug.Package}}</a></dd>
+    <dd><a class="font-mono underline" href="/p/{{.Suite}}/{{.Bug.Package}}">{{.Bug.Package}}</a></dd>
     {{end}}
     {{if .Bug.Source}}<dt class="text-neutral-500">Source</dt><dd class="font-mono">{{.Bug.Source}}</dd>{{end}}
     {{if .Bug.SubmitterName}}<dt class="text-neutral-500">Submitter</dt><dd>{{.Bug.SubmitterName}}</dd>{{end}}

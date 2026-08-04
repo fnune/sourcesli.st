@@ -20,8 +20,14 @@ FROM package_search
 WHERE
     suite = $1
     AND kind = 'binary'
-    AND name LIKE $2::text || '%'
-ORDER BY popularity DESC, name ASC
+    AND (
+        name LIKE $2::text || '%'
+        OR name % $2::text
+    )
+ORDER BY
+    (name LIKE $2::text || '%') DESC,
+    popularity DESC,
+    name ASC
 LIMIT $3
 `
 
@@ -38,9 +44,10 @@ type CompletePackageNamesRow struct {
 	Popularity int32
 }
 
-// Autocompletion. Prefix matching first because that is what a reader typing a
-// name expects, with trigram similarity as the tiebreak so a typo still finds
-// something. LIMIT is small: this runs on every keystroke.
+// Autocompletion. Prefix matches come first because that is what a reader
+// typing a name expects; trigram similarity fills what remains so a typo still
+// finds something. Each half is served by its own index and the LIMIT is
+// small: this runs on every keystroke.
 func (q *Queries) CompletePackageNames(ctx context.Context, arg CompletePackageNamesParams) ([]CompletePackageNamesRow, error) {
 	rows, err := q.db.Query(ctx, completePackageNames, arg.Suite, arg.Prefix, arg.MaxResults)
 	if err != nil {

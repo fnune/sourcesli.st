@@ -11,5 +11,10 @@
         </h1>
     {{end}}
     {{template "results" .}}
+    {{if .Truncated}}
+    <p class="mt-2 text-sm text-neutral-600">
+        Only the first {{len .Results}} matches are shown. Narrow the query to see the rest.
+    </p>
+    {{end}}
 </section>
 {{end}}

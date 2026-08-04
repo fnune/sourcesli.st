@@ -31,9 +31,10 @@ ORDER BY popularity DESC, name ASC
 LIMIT sqlc.arg(max_results);
 
 -- name: CompletePackageNames :many
--- Autocompletion. Prefix matching first because that is what a reader typing a
--- name expects, with trigram similarity as the tiebreak so a typo still finds
--- something. LIMIT is small: this runs on every keystroke.
+-- Autocompletion. Prefix matches come first because that is what a reader
+-- typing a name expects; trigram similarity fills what remains so a typo still
+-- finds something. Each half is served by its own index and the LIMIT is
+-- small: this runs on every keystroke.
 SELECT
     name,
     suite,
@@ -43,8 +44,14 @@ FROM package_search
 WHERE
     suite = sqlc.arg(suite)
     AND kind = 'binary'
-    AND name LIKE sqlc.arg(prefix)::text || '%'
-ORDER BY popularity DESC, name ASC
+    AND (
+        name LIKE sqlc.arg(prefix)::text || '%'
+        OR name % sqlc.arg(prefix)::text
+    )
+ORDER BY
+    (name LIKE sqlc.arg(prefix)::text || '%') DESC,
+    popularity DESC,
+    name ASC
 LIMIT sqlc.arg(max_results);
 
 -- name: GetBinaryPackage :many

@@ -47,6 +47,31 @@ func ParsePackageName(raw string) (PackageName, error) {
 
 func (n PackageName) String() string { return string(n) }
 
+// PackageNamePrefix is the beginning of a package name, as typed into
+// autocompletion. It exists apart from PackageName because a single character
+// is a legitimate prefix but not a legitimate name: Policy requires names to be
+// at least two characters.
+type PackageNamePrefix string
+
+var packageNamePrefixPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9+.-]*$`)
+
+// ParsePackageNamePrefix returns the prefix or explains why no package name
+// could ever start with it.
+func ParsePackageNamePrefix(raw string) (PackageNamePrefix, error) {
+	prefix := strings.TrimSpace(raw)
+	switch {
+	case prefix == "":
+		return "", fmt.Errorf("%w: package name prefix is empty", ErrInvalid)
+	case len(prefix) > maxPackageNameLength:
+		return "", fmt.Errorf("%w: package name prefix %q exceeds %d characters", ErrInvalid, prefix, maxPackageNameLength)
+	case !packageNamePrefixPattern.MatchString(prefix):
+		return "", fmt.Errorf("%w: no package name permitted by Debian Policy 5.6.7 starts with %q", ErrInvalid, prefix)
+	}
+	return PackageNamePrefix(prefix), nil
+}
+
+func (p PackageNamePrefix) String() string { return string(p) }
+
 // Architecture is a Debian architecture such as amd64, or the wildcard "all".
 type Architecture string
 
@@ -142,6 +167,20 @@ func ParseSeverity(raw string) (Severity, error) {
 		return "", fmt.Errorf("%w: %q is not a BTS severity", ErrInvalid, raw)
 	}
 	return severity, nil
+}
+
+// Severities lists every BTS severity, most severe first: the order bug lists
+// sort by, which is also the order filter controls should offer.
+func Severities() []Severity {
+	return []Severity{
+		SeverityCritical,
+		SeverityGrave,
+		SeveritySerious,
+		SeverityImportant,
+		SeverityNormal,
+		SeverityMinor,
+		SeverityWishlist,
+	}
 }
 
 // Rank orders severities as the BTS does, most severe first.

@@ -59,6 +59,41 @@ func TestParsePackageNameTrimsSurroundingWhitespace(t *testing.T) {
 	}
 }
 
+func TestParsePackageNamePrefix(t *testing.T) {
+	t.Parallel()
+
+	// A single character is a valid prefix although not a valid name.
+	for _, prefix := range []string{"b", "0", "bash", "lib", "g+"} {
+		if _, err := domain.ParsePackageNamePrefix(prefix); err != nil {
+			t.Errorf("ParsePackageNamePrefix(%q) = %v, want no error", prefix, err)
+		}
+	}
+
+	for _, prefix := range []string{"", "   ", "B", "-b", ".b", "b%", "b_", "two words", "../etc"} {
+		got, err := domain.ParsePackageNamePrefix(prefix)
+		if err == nil {
+			t.Fatalf("ParsePackageNamePrefix(%q) = %q, want an error", prefix, got)
+		}
+		if !errors.Is(err, domain.ErrInvalid) {
+			t.Errorf("ParsePackageNamePrefix(%q) error = %v, want it to wrap ErrInvalid", prefix, err)
+		}
+	}
+}
+
+func TestSeveritiesAreCompleteAndOrdered(t *testing.T) {
+	t.Parallel()
+
+	severities := domain.Severities()
+	if len(severities) != 7 {
+		t.Fatalf("Severities() has %d entries, want the 7 the BTS defines", len(severities))
+	}
+	for i, severity := range severities {
+		if severity.Rank() != i {
+			t.Errorf("Severities()[%d] = %s with rank %d, want the list in rank order", i, severity, severity.Rank())
+		}
+	}
+}
+
 func TestParseBugNumber(t *testing.T) {
 	t.Parallel()
 

@@ -31,6 +31,7 @@ type fakeQueries struct {
 	failWith error
 
 	searchCalledWith query.SearchPackagesParams
+	bugsCalledWith   query.ListBugsForPackageParams
 }
 
 func (f *fakeQueries) ListSuites(context.Context) ([]query.Suite, error) {
@@ -100,12 +101,13 @@ func (f *fakeQueries) GetFreshVersion(
 }
 
 func (f *fakeQueries) ListBugsForPackage(
-	context.Context,
-	query.ListBugsForPackageParams,
+	_ context.Context,
+	arg query.ListBugsForPackageParams,
 ) ([]query.ListBugsForPackageRow, error) {
 	if f.failWith != nil {
 		return nil, f.failWith
 	}
+	f.bugsCalledWith = arg
 	return f.bugList, nil
 }
 
