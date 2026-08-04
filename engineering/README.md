@@ -39,7 +39,7 @@ This project exists on top of data that volunteers pay for. Upstream load is a f
     ```
 
     The repository link is the contact path: an operator who wants us to stop can open an issue without doing any detective work first. It is not decoration, so it is never trimmed to save bytes and never replaced with a generic client string.
-- Back off on failure. Exponential backoff with jitter, honour `Retry-After`, and give up rather than retry-storm. A failed sync is not an emergency because we still hold the previous one.
+- Back off on failure. Exponential backoff with jitter, honour `Retry-After`, and give up rather than retry-storm. A failed sync is not an emergency because we still hold the previous one. Ingest is a single-shot job, so this policy lives in the scheduler's retry configuration, not inside the binary.
 - Serving stale data always beats hammering upstream. Staleness is surfaced to the user, not hidden.
 - If we ever need archive indices directly, they come from `deb.debian.org` (the CDN, funded for this) and never from a volunteer country mirror, using conditional requests and pdiffs the way `apt` does.
 

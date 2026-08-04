@@ -1,6 +1,8 @@
 # 0003. Two-tier freshness
 
-Status: accepted
+Status: accepted, tier 2 not yet implemented
+
+Tier 1 is live. Of tier 2 only the read side exists: the `fresh_binary_versions` overlay, the web tier reading it with priority, and the truncation on every bulk load. The `apt-get update` container that writes it has not been built, so until it is, package versions are at dump freshness and the site says so.
 
 Builds on [0001](0001-source-bulk-data-from-udd.md).
 
