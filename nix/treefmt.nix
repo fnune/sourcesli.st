@@ -29,5 +29,10 @@
     "LICENSE"
     "web/assets/vendor/*"
     "testdata/**"
+    # Generated files are byte-exact tool output. CI regenerates them and
+    # fails on any diff, so a formatter touching them turns every honest
+    # regeneration into drift.
+    "internal/store/query/*"
+    "web/assets/app.css"
   ];
 }

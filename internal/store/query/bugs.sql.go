@@ -164,8 +164,7 @@ type ListBugsForPackageRow struct {
 // severity are optional filters where the empty string means "any"; status is
 // otherwise 'open' or 'closed'.
 func (q *Queries) ListBugsForPackage(ctx context.Context, arg ListBugsForPackageParams) ([]ListBugsForPackageRow, error) {
-	rows, err := q.db.Query(
-		ctx, listBugsForPackage,
+	rows, err := q.db.Query(ctx, listBugsForPackage,
 		arg.Name,
 		arg.Status,
 		arg.Severity,
