@@ -240,6 +240,28 @@ func (q *Queries) GetLastSync(ctx context.Context) (GetLastSyncRow, error) {
 	return i, err
 }
 
+const getScreenshot = `-- name: GetScreenshot :one
+SELECT
+    content_type,
+    image
+FROM package_screenshots
+WHERE package = $1
+`
+
+type GetScreenshotRow struct {
+	ContentType string
+	Image       []byte
+}
+
+// A mirrored thumbnail. Served by us so a visitor request never reaches
+// screenshots.debian.net.
+func (q *Queries) GetScreenshot(ctx context.Context, package_ string) (GetScreenshotRow, error) {
+	row := q.db.QueryRow(ctx, getScreenshot, package_)
+	var i GetScreenshotRow
+	err := row.Scan(&i.ContentType, &i.Image)
+	return i, err
+}
+
 const getSourcePackage = `-- name: GetSourcePackage :one
 SELECT
     name,
@@ -289,6 +311,77 @@ func (q *Queries) GetSourcePackage(ctx context.Context, arg GetSourcePackagePara
 	return i, err
 }
 
+const listISOVersions = `-- name: ListISOVersions :many
+SELECT
+    channel,
+    version
+FROM iso_versions
+`
+
+type ListISOVersionsRow struct {
+	Channel string
+	Version string
+}
+
+// The point releases ingest last observed on cdimage. The image chooser
+// builds exact download filenames from them.
+func (q *Queries) ListISOVersions(ctx context.Context) ([]ListISOVersionsRow, error) {
+	rows, err := q.db.Query(ctx, listISOVersions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListISOVersionsRow{}
+	for rows.Next() {
+		var i ListISOVersionsRow
+		if err := rows.Scan(&i.Channel, &i.Version); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPackageSuites = `-- name: ListPackageSuites :many
+SELECT DISTINCT ON (suite)
+    suite,
+    version
+FROM package_search
+WHERE name = $1
+ORDER BY suite ASC, (kind = 'binary') DESC
+`
+
+type ListPackageSuitesRow struct {
+	Suite   string
+	Version string
+}
+
+// Which suites carry a package and at what version, for the suite switcher on
+// the package page. A binary row wins over a source row of the same name; the
+// version is the search table's approximation, good enough for a tab label.
+func (q *Queries) ListPackageSuites(ctx context.Context, name string) ([]ListPackageSuitesRow, error) {
+	rows, err := q.db.Query(ctx, listPackageSuites, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPackageSuitesRow{}
+	for rows.Next() {
+		var i ListPackageSuitesRow
+		if err := rows.Scan(&i.Suite, &i.Version); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSuites = `-- name: ListSuites :many
 SELECT
     name,
@@ -315,6 +408,65 @@ func (q *Queries) ListSuites(ctx context.Context) ([]Suite, error) {
 			&i.Version,
 			&i.Role,
 			&i.SortOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTopPackages = `-- name: ListTopPackages :many
+SELECT
+    name,
+    suite,
+    synopsis,
+    votes,
+    exists(
+        SELECT 1 FROM package_screenshots AS x
+        WHERE x.package = package_search.name
+    ) AS has_screenshot
+FROM package_search
+WHERE suite = $1 AND kind = 'binary' AND application
+ORDER BY votes DESC, name ASC
+LIMIT $2
+`
+
+type ListTopPackagesParams struct {
+	Suite      string
+	MaxResults int32
+}
+
+type ListTopPackagesRow struct {
+	Name          string
+	Suite         string
+	Synopsis      string
+	Votes         int32
+	HasScreenshot bool
+}
+
+// The most used applications in one suite, for the front page. The transform
+// decides what counts as an application; votes is popcon's count of systems
+// that actually use the package, which ranks firefox above plumbing that is
+// merely installed everywhere.
+func (q *Queries) ListTopPackages(ctx context.Context, arg ListTopPackagesParams) ([]ListTopPackagesRow, error) {
+	rows, err := q.db.Query(ctx, listTopPackages, arg.Suite, arg.MaxResults)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTopPackagesRow{}
+	for rows.Next() {
+		var i ListTopPackagesRow
+		if err := rows.Scan(
+			&i.Name,
+			&i.Suite,
+			&i.Synopsis,
+			&i.Votes,
+			&i.HasScreenshot,
 		); err != nil {
 			return nil, err
 		}

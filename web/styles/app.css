@@ -26,4 +26,47 @@
     .field:focus {
         @apply border-neutral-500 ring-2 ring-neutral-200;
     }
+
+    /* Radio cards: the input is visually hidden but stays focusable, so the
+       card must carry both the checked and the focus state for it. */
+    .choice {
+        @apply cursor-pointer;
+    }
+
+    .choice-card {
+        @apply block h-full rounded-md border border-neutral-300 bg-white px-3
+        py-2;
+    }
+
+    .choice-pill {
+        @apply block rounded-full border border-neutral-300 bg-white px-3
+        py-1.5 text-sm;
+    }
+
+    .choice input:checked + .choice-card,
+    .choice input:checked + .choice-pill {
+        @apply border-neutral-900 ring-1 ring-neutral-900;
+    }
+
+    .choice input:focus-visible + .choice-card,
+    .choice input:focus-visible + .choice-pill {
+        @apply ring-2 ring-neutral-400;
+    }
+
+    /* Non-live images carry no desktop, so the desktop cards grey out and an
+       overlay says why. CSS reacts to the checked flavour radio, because htmx
+       only refreshes the answer card, not the form. */
+    .desktop-overlay {
+        @apply hidden;
+    }
+
+    #images-form:has(input[name="flavour"]:checked:not(#flavour-live))
+    .desktop-grid {
+        @apply pointer-events-none opacity-40 grayscale;
+    }
+
+    #images-form:has(input[name="flavour"]:checked:not(#flavour-live))
+    .desktop-overlay {
+        @apply flex;
+    }
 }

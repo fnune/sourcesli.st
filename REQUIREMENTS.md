@@ -20,7 +20,7 @@ What the project has to do, and the constraints it has to do it under. Principle
 
 - Answer the question "which Debian image do I actually want" without requiring prior knowledge of Debian's release and media structure.
 - Cover architecture, installer type, desktop environment, and whether non-free firmware is needed.
-- Produce the right download directory, the filename pattern to look for, and the matching checksum and signature. The directory rather than the file, because point releases rename the file and a pattern cannot go stale into a broken link.
+- Produce a direct download link to the current point release, with the matching checksum and signature. Ingest observes the release version from cdimage's checksum files, so the link tracks point releases instead of going stale; compiled-in versions cover an empty database.
 - This is the part of the product with no good existing alternative, so it earns the most attention.
 
 ### Non-goals

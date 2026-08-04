@@ -72,6 +72,57 @@ func ParsePackageNamePrefix(raw string) (PackageNamePrefix, error) {
 
 func (p PackageNamePrefix) String() string { return string(p) }
 
+// Dependency is one alternative inside a relationship clause: a package name,
+// where a link to it should point, and the constraint text that followed it.
+type Dependency struct {
+	// Name as written, including any architecture qualifier ("libc6:any").
+	Name string
+	// Target is the bare package name a link should use, empty when the name
+	// does not parse as one.
+	Target string
+	// Constraint is everything after the name: "(>= 2.39)", "[amd64]", or "".
+	Constraint string
+}
+
+// DependencyGroup is a set of alternatives separated by "|" in the field.
+type DependencyGroup []Dependency
+
+// ParseDependencies splits a Debian relationship field such as Depends into
+// clauses and alternatives, so a page can link each name instead of printing
+// the raw field. It never errors: a token that is not a package name comes
+// back with an empty Target and renders as plain text.
+func ParseDependencies(raw string) []DependencyGroup {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil
+	}
+
+	var groups []DependencyGroup
+	for _, clause := range strings.Split(trimmed, ",") {
+		var group DependencyGroup
+		for _, alternative := range strings.Split(clause, "|") {
+			alternative = strings.TrimSpace(alternative)
+			if alternative == "" {
+				continue
+			}
+
+			name, constraint, _ := strings.Cut(alternative, " ")
+			dependency := Dependency{Name: name, Constraint: strings.TrimSpace(constraint)}
+
+			// "libc6:any" pins the architecture; the page for it is libc6's.
+			base, _, _ := strings.Cut(name, ":")
+			if parsed, err := ParsePackageName(base); err == nil {
+				dependency.Target = parsed.String()
+			}
+			group = append(group, dependency)
+		}
+		if len(group) > 0 {
+			groups = append(groups, group)
+		}
+	}
+	return groups
+}
+
 // Architecture is a Debian architecture such as amd64, or the wildcard "all".
 type Architecture string
 

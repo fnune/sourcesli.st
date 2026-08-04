@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"testing/fstest"
@@ -95,6 +97,8 @@ func seedUpstream(t *testing.T, pool *pgxpool.Pool) {
 		`CREATE TABLE udd_raw.archived_bugs (LIKE udd_raw.bugs)`,
 		`CREATE TABLE udd_raw.bugs_tags (id integer, tag text)`,
 		`CREATE TABLE udd_raw.popcon (package text, insts integer, vote integer, recent integer)`,
+		`CREATE TABLE udd_raw.debtags (package text, tag text)`,
+		`CREATE TABLE udd_raw.screenshots (package text, screenshot_url text, small_image_url text)`,
 
 		// One package present in a suite we model, one in a suite we do not, and
 		// one from Ubuntu. Only the first may survive the transform.
@@ -390,6 +394,88 @@ func TestLoadLeavesNoStagingTables(t *testing.T) {
 	}
 }
 
+// The application flag feeds the front page, and every signal that builds it
+// crosses the transform: screenshots, debtags, priority, and the dependency
+// sniff. A shell utility with none of them must stay unflagged.
+func TestLoadFlagsApplications(t *testing.T) {
+	pool := requireDatabase(t)
+	migrateFresh(t, pool)
+	seedUpstream(t, pool)
+
+	statements := []string{
+		`INSERT INTO udd_raw.packages
+			(package, version, architecture, source, description, distribution, release, component,
+			 section, priority, depends)
+		 VALUES ('galaxy', '1.0-1', 'amd64', 'galaxy', E'browse the galaxy\n A GUI.', 'debian', 'sid',
+			 'main', 'graphics', 'optional', 'libgtk-4-1 (>= 4.14), libc6')`,
+		`INSERT INTO udd_raw.screenshots (package, screenshot_url, small_image_url)
+		 VALUES ('galaxy', 'https://screenshots.debian.net/galaxy',
+			 'https://screenshots.debian.net/thumbnail/galaxy')`,
+		`INSERT INTO udd_raw.popcon (package, insts, vote, recent) VALUES ('galaxy', 900, 800, 100)`,
+	}
+	for _, statement := range statements {
+		if _, err := pool.Exec(t.Context(), statement); err != nil {
+			t.Fatalf("seeding the application: %v", err)
+		}
+	}
+
+	if _, err := newLoader(t, pool).Load(t.Context()); err != nil {
+		t.Fatalf("loading: %v", err)
+	}
+
+	if got := count(t, pool, `SELECT count(*) FROM package_search
+		WHERE name = 'galaxy' AND kind = 'binary' AND application AND votes = 800`); got != 1 {
+		t.Error("a GUI program with a screenshot should be flagged as an application, carrying its votes")
+	}
+	if got := count(t, pool, `SELECT count(*) FROM package_search
+		WHERE name = 'bash' AND application`); got != 0 {
+		t.Error("a shell utility should not be flagged as an application")
+	}
+	if got := count(t, pool, `SELECT count(*) FROM screenshot_sources
+		WHERE package = 'galaxy'`); got != 1 {
+		t.Error("the load should stage one thumbnail URL per package with a screenshot")
+	}
+}
+
+// A desktop's default applications inherit the desktop's install base, so a
+// package pulled in by a popular metapackage is unflagged: the front page is
+// for what people chose, not what came with GNOME.
+func TestLoadUnflagsMetapackageDefaults(t *testing.T) {
+	pool := requireDatabase(t)
+	migrateFresh(t, pool)
+	seedUpstream(t, pool)
+
+	statements := []string{
+		`INSERT INTO udd_raw.packages
+			(package, version, architecture, source, description, distribution, release, component,
+			 section, priority, depends)
+		 VALUES
+			('galaxy', '1.0-1', 'amd64', 'galaxy', E'browse the galaxy\n A GUI.', 'debian', 'sid',
+			 'main', 'graphics', 'optional', 'libgtk-4-1 (>= 4.14), libc6'),
+			('desktop-core', '1.0', 'amd64', 'desktop-core', 'metapackage', 'debian', 'sid',
+			 'main', 'metapackages', 'optional', 'galaxy, dbus')`,
+		`INSERT INTO udd_raw.screenshots (package, screenshot_url, small_image_url)
+		 VALUES ('galaxy', 'https://screenshots.debian.net/galaxy',
+			 'https://screenshots.debian.net/thumbnail/galaxy')`,
+		`INSERT INTO udd_raw.popcon (package, insts, vote, recent)
+		 VALUES ('galaxy', 900, 800, 100), ('desktop-core', 800, 10, 10)`,
+	}
+	for _, statement := range statements {
+		if _, err := pool.Exec(t.Context(), statement); err != nil {
+			t.Fatalf("seeding: %v", err)
+		}
+	}
+
+	if _, err := newLoader(t, pool).Load(t.Context()); err != nil {
+		t.Fatalf("loading: %v", err)
+	}
+
+	if got := count(t, pool, `SELECT count(*) FROM package_search
+		WHERE name = 'galaxy' AND application`); got != 0 {
+		t.Error("a package depended on by a popular metapackage should not be flagged")
+	}
+}
+
 // Popcon counts binary installations, so a source package whose binaries carry
 // other names would score zero if its name were joined against popcon directly.
 func TestLoadDerivesSourcePopularityFromItsBinaries(t *testing.T) {
@@ -473,6 +559,56 @@ func TestLoadSurvivesALeftoverRetiredTable(t *testing.T) {
 	}
 }
 
+// SyncScreenshots mirrors thumbnails for flagged applications and prunes what
+// fell out of the set, so the site serves every image itself.
+func TestSyncScreenshotsMirrorsAndPrunes(t *testing.T) {
+	pool := requireDatabase(t)
+	migrateFresh(t, pool)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		if _, err := w.Write([]byte("png-bytes")); err != nil {
+			t.Errorf("writing the image: %v", err)
+		}
+	}))
+	defer upstream.Close()
+
+	statements := []string{
+		`INSERT INTO package_search (name, kind, suite, version, synopsis, votes, application, document)
+		 VALUES ('galaxy', 'binary', 'unstable', '1.0-1', 'browse the galaxy', 800, true,
+			 to_tsvector('english', 'galaxy'))`,
+		`INSERT INTO screenshot_sources (package, small_image_url) VALUES ('galaxy', '` + upstream.URL + `')`,
+	}
+	for _, statement := range statements {
+		if _, err := pool.Exec(t.Context(), statement); err != nil {
+			t.Fatalf("seeding: %v", err)
+		}
+	}
+
+	sync := func() {
+		t.Helper()
+		if err := etl.SyncScreenshots(
+			t.Context(), pool, upstream.Client(), "test", etl.SystemClock, discardLogger(),
+		); err != nil {
+			t.Fatalf("syncing screenshots: %v", err)
+		}
+	}
+
+	sync()
+	if got := count(t, pool, `SELECT count(*) FROM package_screenshots
+		WHERE package = 'galaxy' AND content_type = 'image/png'`); got != 1 {
+		t.Error("the thumbnail should be mirrored into package_screenshots")
+	}
+
+	if _, err := pool.Exec(t.Context(), `UPDATE package_search SET application = false`); err != nil {
+		t.Fatalf("unflagging: %v", err)
+	}
+	sync()
+	if got := count(t, pool, `SELECT count(*) FROM package_screenshots`); got != 0 {
+		t.Error("a thumbnail whose package left the top set should be pruned")
+	}
+}
+
 func TestMigrateIsIdempotent(t *testing.T) {
 	pool := requireDatabase(t)
 	migrateFresh(t, pool)
@@ -487,7 +623,7 @@ func TestMigrateIsIdempotent(t *testing.T) {
 		t.Fatalf("migrating a second time: %v", err)
 	}
 
-	if got := count(t, pool, `SELECT count(*) FROM schema_migrations`); got != 1 {
-		t.Errorf("schema_migrations rows = %d, want 1", got)
+	if got := count(t, pool, `SELECT count(*) FROM schema_migrations`); got != len(migrations) {
+		t.Errorf("schema_migrations rows = %d, want one per migration file (%d)", got, len(migrations))
 	}
 }

@@ -70,14 +70,30 @@ type FreshBinaryVersion struct {
 	ObservedAt   time.Time
 }
 
-type PackageSearch struct {
-	Name       string
-	Kind       string
-	Suite      string
+type IsoVersion struct {
+	Channel    string
 	Version    string
-	Synopsis   string
-	Popularity int32
-	Document   interface{}
+	ObservedAt time.Time
+}
+
+type PackageScreenshot struct {
+	Package     string
+	SourceUrl   string
+	ContentType string
+	Image       []byte
+	FetchedAt   time.Time
+}
+
+type PackageSearch struct {
+	Name        string
+	Kind        string
+	Suite       string
+	Version     string
+	Synopsis    string
+	Popularity  int32
+	Document    interface{}
+	Votes       int32
+	Application bool
 }
 
 type Popcon struct {
@@ -85,6 +101,11 @@ type Popcon struct {
 	Installed int32
 	Votes     int32
 	Recent    int32
+}
+
+type ScreenshotSource struct {
+	Package       string
+	SmallImageUrl string
 }
 
 type SourcePackage struct {

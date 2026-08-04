@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,8 +23,12 @@ import (
 
 const (
 	searchResultLimit = 50
+	searchResultMax   = 250
 	completionLimit   = 8
 	bugListLimit      = 25
+	bugListMax        = 200
+	pageStep          = 50
+	topPackagesLimit  = 12
 )
 
 // Queries is the slice of the generated query API this package uses. Declared
@@ -44,6 +49,10 @@ type Queries interface {
 	GetBug(ctx context.Context, number int32) (query.Bug, error)
 	ListBugTags(ctx context.Context, bugNumber int32) ([]string, error)
 	GetLastSync(ctx context.Context) (query.GetLastSyncRow, error)
+	ListISOVersions(ctx context.Context) ([]query.ListISOVersionsRow, error)
+	ListTopPackages(ctx context.Context, arg query.ListTopPackagesParams) ([]query.ListTopPackagesRow, error)
+	ListPackageSuites(ctx context.Context, name string) ([]query.ListPackageSuitesRow, error)
+	GetScreenshot(ctx context.Context, name string) (query.GetScreenshotRow, error)
 }
 
 // Server holds the parsed templates and the query layer. Constructed once at
@@ -107,6 +116,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /p/{suite}/{name}", s.handlePackage)
 	mux.HandleFunc("GET /b/{number}", s.handleBug)
 	mux.HandleFunc("GET /images", s.handleImages)
+	mux.HandleFunc("GET /screenshots/{name}", s.handleScreenshot)
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.Handle("GET /assets/", s.assets)
 	return mux
@@ -121,8 +131,16 @@ type layoutData struct {
 
 type searchData struct {
 	layoutData
-	Results   []query.SearchPackagesRow
+	Results []query.SearchPackagesRow
+	// MoreN is the limit the "show more" link asks for, zero when there is
+	// nothing more to ask.
+	MoreN     int
 	Truncated bool
+}
+
+type dependencySection struct {
+	Label  string
+	Groups []domain.DependencyGroup
 }
 
 type packageData struct {
@@ -132,6 +150,7 @@ type packageData struct {
 	Synopsis      string
 	Description   string
 	Binaries      []query.GetBinaryPackageRow
+	Dependencies  []dependencySection
 	Source        *query.SourcePackage
 	Fresh         *query.GetFreshVersionRow
 	Bugs          []bugSummary
@@ -139,7 +158,33 @@ type packageData struct {
 	BugStatus     string
 	BugSeverity   string
 	Severities    []domain.Severity
+	BugsMoreN     int
 	BugsTruncated bool
+	SuiteVersions map[string]string
+}
+
+// requestedLimit reads the "n" parameter a "show more" link carries, clamped
+// between the page's default and its hard cap.
+func requestedLimit(r *http.Request, base, maximum int32) int32 {
+	n, err := strconv.ParseInt(r.URL.Query().Get("n"), 10, 32)
+	limit := int32(n)
+	switch {
+	case err != nil || limit < base:
+		return base
+	case limit > maximum:
+		return maximum
+	default:
+		return limit
+	}
+}
+
+// nextLimit says what the "show more" link should request: zero when the page
+// is not full or the cap is reached.
+func nextLimit(returned int, limit, maximum int32) int {
+	if returned < int(limit) || limit >= maximum {
+		return 0
+	}
+	return int(min(limit+pageStep, maximum))
 }
 
 type bugSummary struct {
@@ -157,15 +202,7 @@ type bugData struct {
 
 type imagesData struct {
 	layoutData
-	Choice        images.Choice
-	Architectures []struct {
-		Value images.Architecture
-		Label string
-	}
-	Desktops []struct {
-		Value images.Desktop
-		Label string
-	}
+	Choice         images.Choice
 	Recommendation images.Recommendation
 }
 
@@ -175,13 +212,28 @@ type messageData struct {
 	Detail  string
 }
 
+type indexData struct {
+	layoutData
+	Top []query.ListTopPackagesRow
+}
+
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	layout, err := s.layout(r, "")
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	s.render(w, r, "index.html", http.StatusOK, layout)
+
+	top, err := s.queries.ListTopPackages(r.Context(), query.ListTopPackagesParams{
+		Suite:      layout.Suite,
+		MaxResults: topPackagesLimit,
+	})
+	if err != nil {
+		s.serverError(w, r, fmt.Errorf("listing the most installed packages: %w", err))
+		return
+	}
+
+	s.render(w, r, "index.html", http.StatusOK, indexData{layoutData: layout, Top: top})
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
@@ -193,17 +245,19 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	data := searchData{layoutData: layout}
 	if strings.TrimSpace(layout.Query) != "" {
+		limit := requestedLimit(r, searchResultLimit, searchResultMax)
 		results, err := s.queries.SearchPackages(r.Context(), query.SearchPackagesParams{
 			Suite:      layout.Suite,
 			Query:      layout.Query,
-			MaxResults: searchResultLimit,
+			MaxResults: limit,
 		})
 		if err != nil {
 			s.serverError(w, r, fmt.Errorf("searching packages: %w", err))
 			return
 		}
 		data.Results = results
-		data.Truncated = len(results) == searchResultLimit
+		data.MoreN = nextLimit(len(results), limit, searchResultMax)
+		data.Truncated = len(results) == searchResultMax
 	}
 
 	s.render(w, r, "search.html", http.StatusOK, data)
@@ -272,6 +326,18 @@ func (s *Server) handlePackage(w http.ResponseWriter, r *http.Request) {
 		data.Synopsis = binaries[0].Synopsis
 		data.Description = binaries[0].Description
 		data.Binaries = binaries
+
+		for _, field := range []struct{ label, value string }{
+			{"Depends", binaries[0].Depends},
+			{"Pre-Depends", binaries[0].PreDepends},
+			{"Recommends", binaries[0].Recommends},
+			{"Suggests", binaries[0].Suggests},
+		} {
+			if groups := domain.ParseDependencies(field.value); len(groups) > 0 {
+				data.Dependencies = append(data.Dependencies,
+					dependencySection{Label: field.label, Groups: groups})
+			}
+		}
 	}
 
 	// Search offers source packages too, and a source whose binaries all carry
@@ -305,22 +371,36 @@ func (s *Server) handlePackage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// The suite tabs say up front where the package exists and at what
+	// version, instead of letting a click discover a 404.
+	across, err := s.queries.ListPackageSuites(r.Context(), name.String())
+	if err != nil {
+		s.serverError(w, r, fmt.Errorf("listing suites for %s: %w", name, err))
+		return
+	}
+	data.SuiteVersions = make(map[string]string, len(across))
+	for _, row := range across {
+		data.SuiteVersions[row.Suite] = row.Version
+	}
+
 	data.BugStatus, data.BugSeverity = bugFilter(r)
 	status := data.BugStatus
 	if status == "all" {
 		status = ""
 	}
+	bugLimit := requestedLimit(r, bugListLimit, bugListMax)
 	bugs, err := s.queries.ListBugsForPackage(r.Context(), query.ListBugsForPackageParams{
 		Name:       name.String(),
 		Status:     status,
 		Severity:   data.BugSeverity,
-		MaxResults: bugListLimit,
+		MaxResults: bugLimit,
 	})
 	if err != nil {
 		s.serverError(w, r, fmt.Errorf("listing bugs for %s: %w", name, err))
 		return
 	}
-	data.BugsTruncated = len(bugs) == bugListLimit
+	data.BugsMoreN = nextLimit(len(bugs), bugLimit, bugListMax)
+	data.BugsTruncated = len(bugs) == bugListMax
 	for _, bug := range bugs {
 		// An unrecognised severity is upstream telling us something changed. It
 		// is not worth failing a page over, but it must not pass unnoticed.
@@ -399,16 +479,36 @@ func (s *Server) handleImages(w http.ResponseWriter, r *http.Request) {
 		Offline:      parameters.Get("offline") != "",
 	}
 
-	recommendation := images.Recommend(choice)
-
-	// Recommend fills in the defaults, so the form must be redrawn from what it
-	// actually decided rather than from what arrived. Otherwise a first visit
-	// shows empty selects beside a populated answer.
+	// The first visit carries no answers, so the browser supplies the first
+	// one: the User-Agent names the architecture well enough for a default the
+	// form lets the reader correct.
 	if choice.Architecture == "" {
-		choice.Architecture = images.ArchitectureAMD64
+		choice.Architecture = images.DetectArchitecture(r.UserAgent())
 	}
+
+	// A missing or empty iso_versions table degrades to the compiled-in
+	// fallback versions rather than failing the page.
+	var versions images.Versions
+	if rows, err := s.queries.ListISOVersions(r.Context()); err == nil {
+		for _, row := range rows {
+			switch row.Channel {
+			case "stable":
+				versions.Stable = row.Version
+			case "oldstable":
+				versions.Oldstable = row.Version
+			}
+		}
+	} else {
+		s.logger.WarnContext(r.Context(), "reading the ISO versions failed", slog.Any("error", err))
+	}
+
+	recommendation := images.Recommend(choice, versions)
+
+	// Recommend fills in the remaining defaults, so the form is redrawn from
+	// what it decided rather than from what arrived. Otherwise a first visit
+	// shows unchecked controls beside a populated answer.
 	if choice.Flavour == "" {
-		choice.Flavour = images.FlavourNetInstall
+		choice.Flavour = images.FlavourLive
 	}
 	if choice.Desktop == "" {
 		choice.Desktop = images.DesktopGNOME
@@ -417,10 +517,35 @@ func (s *Server) handleImages(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "images.html", http.StatusOK, imagesData{
 		layoutData:     layout,
 		Choice:         choice,
-		Architectures:  images.Architectures(),
-		Desktops:       images.Desktops(),
 		Recommendation: recommendation,
 	})
+}
+
+// handleScreenshot serves a mirrored thumbnail. The bytes come from our own
+// database, so a visitor request never reaches screenshots.debian.net.
+func (s *Server) handleScreenshot(w http.ResponseWriter, r *http.Request) {
+	name, err := domain.ParsePackageName(r.PathValue("name"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	shot, err := s.queries.GetScreenshot(r.Context(), name.String())
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, fmt.Errorf("reading the screenshot for %s: %w", name, err))
+		return
+	}
+
+	w.Header().Set("Content-Type", shot.ContentType)
+	// A day of caching: thumbnails change at most once per sync.
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	if _, err := w.Write(shot.Image); err != nil {
+		s.logger.WarnContext(r.Context(), "writing the screenshot failed", slog.Any("error", err))
+	}
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -488,11 +613,11 @@ func bugFilter(r *http.Request) (status, severity string) {
 	return status, severity
 }
 
-// suiteOrDefault falls back to unstable, which is where a reader looking for
-// the newest version of something almost always means to look.
+// suiteOrDefault falls back to stable, which is what most visitors run. The
+// suite tabs on every package page put the other suites one click away.
 func suiteOrDefault(suite string) string {
 	if suite == "" {
-		return "unstable"
+		return "stable"
 	}
 	return suite
 }

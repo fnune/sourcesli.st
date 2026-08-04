@@ -23,6 +23,9 @@ type Querier interface {
 	GetFreshVersion(ctx context.Context, arg GetFreshVersionParams) (GetFreshVersionRow, error)
 	// Drives the "data as of" line every page carries.
 	GetLastSync(ctx context.Context) (GetLastSyncRow, error)
+	// A mirrored thumbnail. Served by us so a visitor request never reaches
+	// screenshots.debian.net.
+	GetScreenshot(ctx context.Context, package_ string) (GetScreenshotRow, error)
 	GetSourcePackage(ctx context.Context, arg GetSourcePackageParams) (SourcePackage, error)
 	ListBugTags(ctx context.Context, bugNumber int32) ([]string, error)
 	// Bugs against a binary package or its source, most severe first.
@@ -32,7 +35,19 @@ type Querier interface {
 	// severity are optional filters where the empty string means "any"; status is
 	// otherwise 'open' or 'closed'.
 	ListBugsForPackage(ctx context.Context, arg ListBugsForPackageParams) ([]ListBugsForPackageRow, error)
+	// The point releases ingest last observed on cdimage. The image chooser
+	// builds exact download filenames from them.
+	ListISOVersions(ctx context.Context) ([]ListISOVersionsRow, error)
+	// Which suites carry a package and at what version, for the suite switcher on
+	// the package page. A binary row wins over a source row of the same name; the
+	// version is the search table's approximation, good enough for a tab label.
+	ListPackageSuites(ctx context.Context, name string) ([]ListPackageSuitesRow, error)
 	ListSuites(ctx context.Context) ([]Suite, error)
+	// The most used applications in one suite, for the front page. The transform
+	// decides what counts as an application; votes is popcon's count of systems
+	// that actually use the package, which ranks firefox above plumbing that is
+	// merely installed everywhere.
+	ListTopPackages(ctx context.Context, arg ListTopPackagesParams) ([]ListTopPackagesRow, error)
 	// Queries the web tier runs. Every one is bounded and served by an index
 	// created in db/migrations.
 	// Full-text search across package names and synopses, most popular first.

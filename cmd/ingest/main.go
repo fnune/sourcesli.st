@@ -112,6 +112,22 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		return err
 	}
 
+	// The chooser falls back to compiled-in versions, so failing to read a
+	// point release degrades one page rather than the whole sync.
+	if err := etl.SyncISOVersions(
+		ctx, pool, etl.ISOVersionsHTTPClient(), config.userAgent, etl.SystemClock, logger,
+	); err != nil {
+		logger.WarnContext(ctx, "refreshing the ISO versions failed", slog.Any("error", err))
+	}
+
+	// A missing thumbnail costs a grey box on the front page, never a failed
+	// sync.
+	if err := etl.SyncScreenshots(
+		ctx, pool, etl.ISOVersionsHTTPClient(), config.userAgent, etl.SystemClock, logger,
+	); err != nil {
+		logger.WarnContext(ctx, "refreshing the screenshots failed", slog.Any("error", err))
+	}
+
 	logger.InfoContext(ctx, "ingest finished",
 		slog.String("outcome", string(result.Outcome)),
 		slog.Int64("rows", result.RowsWritten))

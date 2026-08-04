@@ -10,3 +10,5 @@ bugs
 bugs_tags
 archived_bugs
 popcon
+debtags
+screenshots

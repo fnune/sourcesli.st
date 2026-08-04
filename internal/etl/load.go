@@ -39,6 +39,7 @@ var replaceableTables = []string{
 	"bug_tags",
 	"popcon",
 	"package_search",
+	"screenshot_sources",
 }
 
 // safeIdentifier matches the table names we generate. Applied to every name

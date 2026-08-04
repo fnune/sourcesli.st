@@ -2,22 +2,35 @@
 
 {{define "content"}}
 <h1 class="text-2xl font-semibold">Search Debian packages</h1>
-<p class="mt-2 text-neutral-600">
-    Binary and source packages across every suite, with their open bug reports.
-</p>
 
 {{template "searchform" .}}
 
+{{if .Top}}
 <section class="mt-10">
-    <h2 class="text-lg font-semibold">Suites</h2>
-    <ul class="mt-3 grid gap-2 sm:grid-cols-2">
-        {{range .Suites}}
-        <li class="rounded-md border border-neutral-200 bg-white px-3 py-2">
-            <span class="font-mono">{{.Name}}</span>
-            {{if .Codename}}<span class="text-neutral-500">&middot; {{.Codename}}</span>{{end}}
-            {{if .Version}}<span class="text-neutral-500">&middot; {{.Version}}</span>{{end}}
+    <h2 class="text-lg font-semibold">Popular applications in <span class="font-mono">{{.Suite}}</span></h2>
+    <ul class="mt-3 divide-y divide-neutral-200 rounded-md border border-neutral-200 bg-white">
+        {{range .Top}}
+        <li>
+            <a class="flex items-center gap-3 px-4 py-2 hover:bg-neutral-50" href="/p/{{.Suite}}/{{.Name}}">
+                {{if .HasScreenshot}}
+                <img class="h-10 w-16 flex-none rounded border border-neutral-200 object-cover"
+                     src="/screenshots/{{.Name}}" alt="" loading="lazy">
+                {{else}}
+                <span class="h-10 w-16 flex-none rounded bg-neutral-100"></span>
+                {{end}}
+                <span class="min-w-0">
+                    <span class="block font-mono font-medium underline">{{.Name}}</span>
+                    {{if .Synopsis}}<span class="block truncate text-sm text-neutral-500">{{.Synopsis}}</span>{{end}}
+                </span>
+            </a>
         </li>
         {{end}}
     </ul>
+    <p class="mt-2 text-xs text-neutral-500">
+        Ranked by regular use, as reported to Debian's
+        <a class="underline" href="https://popcon.debian.org/">popularity contest</a>.
+        Screenshots from <a class="underline" href="https://screenshots.debian.net/">screenshots.debian.net</a>.
+    </p>
 </section>
+{{end}}
 {{end}}

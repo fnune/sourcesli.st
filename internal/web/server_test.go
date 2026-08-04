@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -92,6 +93,17 @@ func populatedQueries() *fakeQueries {
 		bugTags:  []string{"upstream"},
 		openBugs: 2,
 		lastSync: &syncedAt,
+		top: []query.ListTopPackagesRow{
+			{Name: "firefox-esr", Suite: "unstable", Synopsis: "Mozilla Firefox web browser", Votes: 51115},
+			{Name: "nautilus", Suite: "unstable", Synopsis: "file manager for GNOME", Votes: 48302},
+		},
+		suiteVersions: []query.ListPackageSuitesRow{
+			{Suite: "stable", Version: "5.2-1"},
+			{Suite: "unstable", Version: "5.3-3"},
+		},
+		screenshots: map[string]query.GetScreenshotRow{
+			"firefox-esr": {ContentType: "image/png", Image: []byte("not-really-a-png")},
+		},
 	}
 }
 
@@ -104,10 +116,55 @@ func TestIndexRenders(t *testing.T) {
 		t.Fatalf("status = %d, want 200", response.Code)
 	}
 	body := response.Body.String()
-	for _, want := range []string{"Search Debian packages", "unstable", "sid", "Which image?"} {
+	for _, want := range []string{"Search Debian packages", "unstable", "sid", "Download Debian"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
 		}
+	}
+}
+
+// The front page offers something to browse cold: applications a person would
+// recognise, each a link into the site, with a mirrored thumbnail when one
+// exists.
+func TestIndexListsPopularApplications(t *testing.T) {
+	t.Parallel()
+
+	queries := populatedQueries()
+	queries.top[0].HasScreenshot = true
+
+	body := get(t, newTestServer(t, queries), "/", nil).Body.String()
+
+	for _, want := range []string{
+		"Popular applications",
+		`href="/p/unstable/firefox-esr"`,
+		`src="/screenshots/firefox-esr"`,
+		"popularity contest",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("index does not contain %q", want)
+		}
+	}
+}
+
+// Thumbnails are served from our own database with cache headers; hotlinking
+// screenshots.debian.net would make every visitor a load on Debian.
+func TestScreenshotsAreServedFromOurDatabase(t *testing.T) {
+	t.Parallel()
+
+	response := get(t, newTestServer(t, populatedQueries()), "/screenshots/firefox-esr", nil)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
+	}
+	if got := response.Header().Get("Content-Type"); got != "image/png" {
+		t.Errorf("Content-Type = %q, want the stored type", got)
+	}
+	if response.Header().Get("Cache-Control") == "" {
+		t.Error("thumbnails should carry a cache header")
+	}
+
+	if code := get(t, newTestServer(t, populatedQueries()), "/screenshots/nosuchthing", nil).Code; code != http.StatusNotFound {
+		t.Errorf("missing screenshot status = %d, want 404", code)
 	}
 }
 
@@ -136,6 +193,19 @@ func TestFooterSaysSoWhenNothingHasBeenIngested(t *testing.T) {
 	}
 }
 
+// Stable is the default suite everywhere: it is what most visitors run, and
+// the suite tabs put the rest one click away.
+func TestDefaultSuiteIsStable(t *testing.T) {
+	t.Parallel()
+
+	queries := populatedQueries()
+	get(t, newTestServer(t, queries), "/search?q=bash", nil)
+
+	if queries.searchCalledWith.Suite != "stable" {
+		t.Errorf("default search suite = %q, want stable", queries.searchCalledWith.Suite)
+	}
+}
+
 func TestSearchRendersResults(t *testing.T) {
 	t.Parallel()
 
@@ -153,9 +223,9 @@ func TestSearchRendersResults(t *testing.T) {
 	}
 }
 
-// The result limit exists, so hitting it has to be said out loud: a list that
-// stops at 50 with no comment reads as "that is everything".
-func TestSearchSaysWhenResultsAreTruncated(t *testing.T) {
+// A full page offers more instead of silently stopping; the hard cap is the
+// only point where the page says it cut the list off.
+func TestSearchOffersMoreResults(t *testing.T) {
 	t.Parallel()
 
 	queries := populatedQueries()
@@ -164,10 +234,23 @@ func TestSearchSaysWhenResultsAreTruncated(t *testing.T) {
 		queries.search[i] = query.SearchPackagesRow{Name: "bash", Kind: "binary", Suite: "unstable"}
 	}
 
-	response := get(t, newTestServer(t, queries), "/search?q=bash&suite=unstable", nil)
+	body := get(t, newTestServer(t, queries), "/search?q=bash&suite=unstable", nil).Body.String()
 
-	if !strings.Contains(response.Body.String(), "Only the first 50 matches are shown") {
-		t.Error("a full page of results should say it is truncated")
+	if !strings.Contains(body, "n=100") || !strings.Contains(body, "Show more") {
+		t.Error("a full page should link to a larger one")
+	}
+
+	queries.search = make([]query.SearchPackagesRow, 250)
+	for i := range queries.search {
+		queries.search[i] = query.SearchPackagesRow{Name: "bash", Kind: "binary", Suite: "unstable"}
+	}
+	body = get(t, newTestServer(t, queries), "/search?q=bash&suite=unstable&n=250", nil).Body.String()
+
+	if strings.Contains(body, "Show more") {
+		t.Error("the cap reached should not offer more")
+	}
+	if !strings.Contains(body, "Only the first 250 matches are shown") {
+		t.Error("hitting the cap should be said out loud")
 	}
 }
 
@@ -312,20 +395,37 @@ func TestPackagePageShowsDependencies(t *testing.T) {
 
 	body := get(t, newTestServer(t, queries), "/p/unstable/bash", nil).Body.String()
 
-	for _, want := range []string{"Dependencies", "base-files (&gt;= 2.1.12)", "bash-completion"} {
+	for _, want := range []string{
+		"Dependencies",
+		`href="/p/unstable/base-files"`,
+		"(&gt;= 2.1.12)",
+		`href="/p/unstable/bash-completion"`,
+	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("package page does not contain %q", want)
 		}
 	}
 }
 
+// The suite tabs answer "where does this exist and at what version" up front,
+// instead of letting a click discover a 404.
 func TestPackagePageLinksTheOtherSuites(t *testing.T) {
 	t.Parallel()
 
-	body := get(t, newTestServer(t, populatedQueries()), "/p/unstable/bash", nil).Body.String()
+	queries := populatedQueries()
+	queries.suites = append(queries.suites,
+		query.Suite{Name: "experimental", Codename: "rc-buggy", Role: "experimental", SortOrder: 50})
+
+	body := get(t, newTestServer(t, queries), "/p/unstable/bash", nil).Body.String()
 
 	if !strings.Contains(body, `href="/p/stable/bash"`) {
-		t.Error("the package page should link the package in the other suites")
+		t.Error("a suite that carries the package should be a link")
+	}
+	if !strings.Contains(body, "5.2-1") {
+		t.Error("the tab should carry the version in that suite")
+	}
+	if strings.Contains(body, `href="/p/experimental/bash"`) {
+		t.Error("a suite without the package should not be a link")
 	}
 }
 
@@ -356,7 +456,7 @@ func TestPackagePageBugsDefaultToOpen(t *testing.T) {
 	}
 }
 
-func TestPackagePageSaysWhenBugsAreTruncated(t *testing.T) {
+func TestPackagePageOffersMoreBugs(t *testing.T) {
 	t.Parallel()
 
 	queries := populatedQueries()
@@ -367,8 +467,14 @@ func TestPackagePageSaysWhenBugsAreTruncated(t *testing.T) {
 
 	body := get(t, newTestServer(t, queries), "/p/unstable/bash", nil).Body.String()
 
-	if !strings.Contains(body, "Showing the first 25 matches") {
-		t.Error("a full page of bugs should say it is truncated")
+	if !strings.Contains(body, "n=75") || !strings.Contains(body, "Show more") {
+		t.Error("a full page of bugs should link to a larger one")
+	}
+
+	// The "show more" link must reach the query as a larger limit.
+	get(t, newTestServer(t, queries), "/p/unstable/bash?n=75", nil)
+	if queries.bugsCalledWith.MaxResults != 75 {
+		t.Errorf("bugs listed with limit %d, want 75", queries.bugsCalledWith.MaxResults)
 	}
 }
 
@@ -479,7 +585,7 @@ func TestImageChooserRendersWithoutADatabase(t *testing.T) {
 		t.Fatalf("status = %d, want 200", response.Code)
 	}
 	body := response.Body.String()
-	for _, want := range []string{"Network installer for amd64", "iso-cd/", "SHA512SUMS", "non-free firmware"} {
+	for _, want := range []string{"Live image with GNOME", "iso-hybrid/", "SHA512SUMS"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("chooser does not contain %q", want)
 		}
@@ -500,9 +606,73 @@ func TestImageChooserReflectsTheAnswers(t *testing.T) {
 		t.Error("the filename pattern should name the chosen desktop")
 	}
 	// The form has to come back showing what was asked for, or the answer and
-	// the controls disagree on the next submission.
-	if !strings.Contains(body, `value="xfce" selected`) {
-		t.Error("the form should keep the chosen desktop selected")
+	// the controls disagree on the next change.
+	if !regexp.MustCompile(`value="xfce"\s+checked`).MatchString(body) {
+		t.Error("the form should keep the chosen desktop checked")
+	}
+}
+
+// The first visit carries no answers, so the User-Agent supplies the
+// architecture and the page leads with a finished recommendation instead of a
+// questionnaire.
+func TestImageChooserDetectsTheArchitecture(t *testing.T) {
+	t.Parallel()
+
+	response := get(t, newTestServer(t, populatedQueries()), "/images",
+		map[string]string{"User-Agent": "Mozilla/5.0 (X11; Linux aarch64; rv:141.0) Gecko/20100101"})
+
+	body := response.Body.String()
+	if !strings.Contains(body, "Network installer for arm64") {
+		t.Error("an ARM browser should get an ARM recommendation without being asked")
+	}
+}
+
+// The exact filename comes from the versions ingest observed, so the download
+// link points at a file that exists today rather than at a pattern.
+func TestImageChooserUsesTheIngestedVersions(t *testing.T) {
+	t.Parallel()
+
+	queries := populatedQueries()
+	queries.isoVersions = []query.ListISOVersionsRow{{Channel: "stable", Version: "13.7.0"}}
+
+	body := get(t, newTestServer(t, queries), "/images", nil).Body.String()
+
+	if !strings.Contains(body, "debian-live-13.7.0-amd64-gnome.iso") {
+		t.Error("the page should offer the exact file for the ingested version")
+	}
+}
+
+// Non-live images carry no desktop, so the desktop cards grey out under an
+// overlay whose call to action is a plain label for the live radio: clicking
+// it switches the flavour with no JavaScript beyond htmx's refresh.
+func TestDesktopOverlayOffersTheLiveSwitch(t *testing.T) {
+	t.Parallel()
+
+	body := get(t, newTestServer(t, populatedQueries()), "/images?flavour=netinst", nil).Body.String()
+
+	if !strings.Contains(body, `for="flavour-live"`) {
+		t.Error("the overlay should offer switching to the live image via a label")
+	}
+	if !strings.Contains(body, `id="flavour-live"`) {
+		t.Error("the live radio needs the id the overlay label points at")
+	}
+}
+
+// The reader changes a radio and the answer updates; there is no submit
+// button outside noscript. The form must still work as a plain GET form.
+func TestImageChooserFormWorksWithoutJavaScript(t *testing.T) {
+	t.Parallel()
+
+	body := get(t, newTestServer(t, populatedQueries()), "/images", nil).Body.String()
+
+	if !strings.Contains(body, `action="/images" method="get"`) {
+		t.Error("the chooser must be a real form")
+	}
+	if !strings.Contains(body, "<noscript>") {
+		t.Error("the no-JavaScript path needs its submit button")
+	}
+	if strings.Contains(body, "Show me the image") {
+		t.Error("the always-visible submit button should be gone")
 	}
 }
 

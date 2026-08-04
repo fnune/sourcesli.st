@@ -134,3 +134,50 @@ SELECT
     etag
 FROM upstream_state
 WHERE id;
+
+-- name: ListPackageSuites :many
+-- Which suites carry a package and at what version, for the suite switcher on
+-- the package page. A binary row wins over a source row of the same name; the
+-- version is the search table's approximation, good enough for a tab label.
+SELECT DISTINCT ON (suite)
+    suite,
+    version
+FROM package_search
+WHERE name = $1
+ORDER BY suite ASC, (kind = 'binary') DESC;
+
+-- name: ListTopPackages :many
+-- The most used applications in one suite, for the front page. The transform
+-- decides what counts as an application; votes is popcon's count of systems
+-- that actually use the package, which ranks firefox above plumbing that is
+-- merely installed everywhere.
+SELECT
+    name,
+    suite,
+    synopsis,
+    votes,
+    exists(
+        SELECT 1 FROM package_screenshots AS x
+        WHERE x.package = package_search.name
+    ) AS has_screenshot
+FROM package_search
+WHERE suite = sqlc.arg(suite) AND kind = 'binary' AND application
+ORDER BY votes DESC, name ASC
+LIMIT sqlc.arg(max_results);
+
+-- name: GetScreenshot :one
+-- A mirrored thumbnail. Served by us so a visitor request never reaches
+-- screenshots.debian.net.
+SELECT
+    content_type,
+    image
+FROM package_screenshots
+WHERE package = $1;
+
+-- name: ListISOVersions :many
+-- The point releases ingest last observed on cdimage. The image chooser
+-- builds exact download filenames from them.
+SELECT
+    channel,
+    version
+FROM iso_versions;

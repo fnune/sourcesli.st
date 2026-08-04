@@ -94,6 +94,48 @@ func TestSeveritiesAreCompleteAndOrdered(t *testing.T) {
 	}
 }
 
+func TestParseDependencies(t *testing.T) {
+	t.Parallel()
+
+	groups := domain.ParseDependencies(
+		"libc6 (>= 2.39), libgtk-3-0t64 (>= 3.13.7), fontconfig | fonts-liberation, libnss3:any, procps",
+	)
+
+	if len(groups) != 5 {
+		t.Fatalf("groups = %d, want 5", len(groups))
+	}
+	first := groups[0][0]
+	if first.Target != "libc6" || first.Constraint != "(>= 2.39)" {
+		t.Errorf("first = %+v, want libc6 with its constraint", first)
+	}
+	if len(groups[2]) != 2 || groups[2][1].Target != "fonts-liberation" {
+		t.Errorf("alternatives = %+v, want both sides of the bar", groups[2])
+	}
+	qualified := groups[3][0]
+	if qualified.Name != "libnss3:any" || qualified.Target != "libnss3" {
+		t.Errorf("qualified = %+v, want the bare name as the link target", qualified)
+	}
+}
+
+func TestParseDependenciesToleratesJunk(t *testing.T) {
+	t.Parallel()
+
+	if got := domain.ParseDependencies(""); got != nil {
+		t.Errorf("empty field = %+v, want nil", got)
+	}
+
+	groups := domain.ParseDependencies("UPPER-not-a-name (>= 1), bash")
+	if len(groups) != 2 {
+		t.Fatalf("groups = %d, want 2", len(groups))
+	}
+	if groups[0][0].Target != "" {
+		t.Errorf("a token that is not a package name should have no link target, got %+v", groups[0][0])
+	}
+	if groups[1][0].Target != "bash" {
+		t.Errorf("the valid clause should still link, got %+v", groups[1][0])
+	}
+}
+
 func TestParseBugNumber(t *testing.T) {
 	t.Parallel()
 

@@ -170,3 +170,21 @@ CREATE TABLE public.popcon (
     recent integer,
     nofiles integer
 );
+
+CREATE TABLE public.debtags (
+    package text,
+    tag text
+);
+
+CREATE TABLE public.screenshots (
+    package text NOT NULL,
+    version text,
+    homepage text,
+    maintainer_name text,
+    maintainer_email text,
+    description text,
+    section text,
+    screenshot_url text NOT NULL,
+    large_image_url text NOT NULL,
+    small_image_url text NOT NULL
+);

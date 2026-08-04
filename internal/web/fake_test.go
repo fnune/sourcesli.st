@@ -14,17 +14,21 @@ import (
 // awkward cases: a package with no source, a bug that does not exist, a
 // database that has never been ingested into.
 type fakeQueries struct {
-	suites      []query.Suite
-	search      []query.SearchPackagesRow
-	completions []query.CompletePackageNamesRow
-	binaries    map[string][]query.GetBinaryPackageRow
-	sources     map[string]query.SourcePackage
-	fresh       map[string]query.GetFreshVersionRow
-	bugs        map[int32]query.Bug
-	bugList     []query.ListBugsForPackageRow
-	bugTags     []string
-	openBugs    int64
-	lastSync    *time.Time
+	suites        []query.Suite
+	search        []query.SearchPackagesRow
+	completions   []query.CompletePackageNamesRow
+	binaries      map[string][]query.GetBinaryPackageRow
+	sources       map[string]query.SourcePackage
+	fresh         map[string]query.GetFreshVersionRow
+	bugs          map[int32]query.Bug
+	bugList       []query.ListBugsForPackageRow
+	bugTags       []string
+	openBugs      int64
+	lastSync      *time.Time
+	isoVersions   []query.ListISOVersionsRow
+	top           []query.ListTopPackagesRow
+	suiteVersions []query.ListPackageSuitesRow
+	screenshots   map[string]query.GetScreenshotRow
 
 	// failWith is returned by every method when set, so a test can assert that
 	// a database failure becomes a 500 rather than a half-rendered page.
@@ -134,6 +138,41 @@ func (f *fakeQueries) ListBugTags(context.Context, int32) ([]string, error) {
 		return nil, f.failWith
 	}
 	return f.bugTags, nil
+}
+
+func (f *fakeQueries) ListTopPackages(
+	context.Context,
+	query.ListTopPackagesParams,
+) ([]query.ListTopPackagesRow, error) {
+	if f.failWith != nil {
+		return nil, f.failWith
+	}
+	return f.top, nil
+}
+
+func (f *fakeQueries) ListPackageSuites(context.Context, string) ([]query.ListPackageSuitesRow, error) {
+	if f.failWith != nil {
+		return nil, f.failWith
+	}
+	return f.suiteVersions, nil
+}
+
+func (f *fakeQueries) GetScreenshot(_ context.Context, name string) (query.GetScreenshotRow, error) {
+	if f.failWith != nil {
+		return query.GetScreenshotRow{}, f.failWith
+	}
+	shot, ok := f.screenshots[name]
+	if !ok {
+		return query.GetScreenshotRow{}, pgx.ErrNoRows
+	}
+	return shot, nil
+}
+
+func (f *fakeQueries) ListISOVersions(context.Context) ([]query.ListISOVersionsRow, error) {
+	if f.failWith != nil {
+		return nil, f.failWith
+	}
+	return f.isoVersions, nil
 }
 
 func (f *fakeQueries) GetLastSync(context.Context) (query.GetLastSyncRow, error) {
