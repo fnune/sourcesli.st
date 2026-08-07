@@ -728,19 +728,19 @@ func TestImageChooserUsesTheIngestedVersions(t *testing.T) {
 	}
 }
 
-// Only stable and oldstable have released images, so the answer names the
-// release it is offering and the page says outright that testing and unstable
-// have none.
+// Only stable and oldstable have released images, and the reader is told which
+// one they are being offered by the label above the answer, which is the one
+// place the page says it.
 func TestImageChooserNamesTheRelease(t *testing.T) {
 	t.Parallel()
 
 	body := get(t, newTestServer(t, populatedQueries()), "/", nil).Body.String()
 
-	if !strings.Contains(body, "Debian 13 (trixie), the stable release") {
+	if !strings.Contains(body, "Debian 13 (trixie), stable") {
 		t.Error("the answer should name the release it recommends")
 	}
-	if !strings.Contains(body, "Testing and unstable have no released images") {
-		t.Error("the page should say that testing and unstable have no images")
+	if strings.Count(body, ", stable") != 1 {
+		t.Error("the release should be named once, not repeated in prose")
 	}
 }
 
