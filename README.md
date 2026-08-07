@@ -61,10 +61,12 @@ nix develop
 
 direnv users can instead create a git-ignored `.envrc` containing `use flake`.
 
+The shell carries `just`, and the justfile names every command below. `just --list` is the index.
+
 Start the whole environment, building images and all:
 
 ```sh
-nix run .#dev-up
+just up
 ```
 
 The site is then on `http://127.0.0.1:8080`. Services run in a rootless podman pod on a private network, published only on the loopback interface, with state in named volumes.
@@ -72,23 +74,23 @@ The site is then on `http://127.0.0.1:8080`. Services run in a rootless podman p
 Destroy it completely, leaving no trace on the host:
 
 ```sh
-nix run .#dev-down
+just down
 ```
 
 ### Checks
 
 ```sh
-nix fmt           # format everything: Go, Nix, shell, YAML, TOML, SQL
-nix flake check   # format check, lint, tests; exactly what CI runs
+just fmt     # format everything: Go, Nix, shell, YAML, TOML, SQL
+just check   # format check, lint, tests; exactly what CI runs
 ```
 
-Inside the dev shell, `go test ./...` and `golangci-lint run` work as usual for a tighter loop.
+`just test` and `just lint` are the tighter loop, and `just vuln` runs the scan CI keeps outside `nix flake check`.
 
 Tests come at three levels: pure tests for the domain and the ISO chooser, handler tests against the real router and templates with a fake query layer, and ETL tests against a real Postgres. The ETL tests are skipped without a database, because what they check is what a fake cannot judge: that the transform SQL runs, the indexes rebuild, and the swap publishes.
 
 ```sh
 export TEST_DATABASE_URL='postgres://user@host/database'
-go test ./... -count=1
+just test
 ```
 
 Any Postgres with the `pg_trgm` and `postgres_fdw` extensions works. The tests drop and recreate the `public` schema, so point them at a disposable database.
@@ -98,8 +100,7 @@ Any Postgres with the `pg_trgm` and `postgres_fdw` extensions works. The tests d
 `internal/store/query` (sqlc, from `db/queries`) and `web/assets/app.css` (Tailwind, from `web/styles` and the templates) are committed tool output: `go:embed` cannot reach a file that is not there. After changing their inputs, regenerate inside the dev shell:
 
 ```sh
-sqlc generate
-tailwindcss --input web/styles/app.css --output web/assets/app.css --minify
+just generate
 ```
 
 CI regenerates both and fails on any diff. The formatter excludes them, so they stay byte-exact tool output.
@@ -109,7 +110,7 @@ CI regenerates both and fails on any diff. The formatter excludes them, so they 
 The database is empty until it is filled. Ingest is a separate, deliberate step because it downloads the whole UDD dump, 2.4 GiB as of August 2026:
 
 ```sh
-nix run .#ingest
+just ingest
 ```
 
 A second run against an unchanged dump transfers no body and rebuilds nothing.

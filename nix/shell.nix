@@ -15,6 +15,7 @@
   pulumi,
   curl,
   jq,
+  just,
 }:
 
 mkShell {
@@ -34,6 +35,7 @@ mkShell {
     pulumi
     curl
     jq
+    just
   ];
 
   env = {
@@ -42,9 +44,9 @@ mkShell {
 
   shellHook = ''
     echo "sourcesli.st dev shell"
-    echo "  nix run .#dev-up     start the environment"
-    echo "  nix run .#dev-down   destroy it"
-    echo "  nix fmt              format everything"
-    echo "  nix flake check      run the full baseline"
+    echo "  just --list          every command in this repository"
+    echo "  just up / just down  start and destroy the environment"
+    echo "  just fmt             format everything"
+    echo "  just check           run the full baseline"
   '';
 }

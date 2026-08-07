@@ -5,6 +5,7 @@
 
   programs = {
     gofumpt.enable = true;
+    just.enable = true;
     nixfmt.enable = true;
     shfmt.enable = true;
     yamlfmt.enable = true;
