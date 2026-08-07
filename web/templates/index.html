@@ -92,6 +92,12 @@
 <section class="mt-12">
     <h2 class="text-lg font-semibold">Popular applications in
         <span class="suite suite-{{.Suite}} ml-1 font-mono"><span class="suite-mark"></span>{{.Suite}}</span></h2>
+    <p class="mt-1 text-ink-muted">
+        What counts as an application is our call, not Debian's: graphical programs, minus libraries,
+        desktop plumbing, and whatever a popular metapackage installs for you. Ordered by
+        <a class="underline" href="https://popcon.debian.org/">popcon</a>, illustrated by
+        <a class="underline" href="https://screenshots.debian.net/">screenshots.debian.net</a>.
+    </p>
     <ul class="mt-3 divide-y divide-line rounded-md border border-line bg-surface">
         {{range .Top}}
         <li>
@@ -115,12 +121,6 @@
         </li>
         {{end}}
     </ul>
-    <p class="mt-2 text-xs text-ink-subtle">
-        What counts as an application is our call, not Debian's: graphical programs, minus libraries,
-        desktop plumbing, and whatever a popular metapackage installs for you. Ordered by
-        <a class="underline" href="https://popcon.debian.org/">popcon</a>, illustrated by
-        <a class="underline" href="https://screenshots.debian.net/">screenshots.debian.net</a>.
-    </p>
 </section>
 {{end}}
 {{end}}
