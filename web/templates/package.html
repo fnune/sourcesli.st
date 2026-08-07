@@ -137,19 +137,19 @@
     <form class="mt-3 flex flex-wrap items-center gap-2 text-sm"
           action="/p/{{.Suite}}/{{.Name}}" method="get">
         <label for="bugs-status">Status</label>
-        <select class="field w-auto" id="bugs-status" name="bugs">
+        <select class="field field-small w-auto" id="bugs-status" name="bugs">
             <option value="open" {{if eq .BugStatus "open"}}selected{{end}}>open</option>
             <option value="closed" {{if eq .BugStatus "closed"}}selected{{end}}>closed</option>
             <option value="all" {{if eq .BugStatus "all"}}selected{{end}}>any</option>
         </select>
         <label for="bugs-severity">Severity</label>
-        <select class="field w-auto" id="bugs-severity" name="severity">
+        <select class="field field-small w-auto" id="bugs-severity" name="severity">
             <option value="">any</option>
             {{range .Severities}}
             <option value="{{.}}" {{if eq (printf "%s" .) $.BugSeverity}}selected{{end}}>{{.}}</option>
             {{end}}
         </select>
-        <button class="button" type="submit">Filter</button>
+        <button class="button button-small" type="submit">Filter</button>
     </form>
 
     {{if .Bugs}}

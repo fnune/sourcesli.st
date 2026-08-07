@@ -155,6 +155,12 @@
         @apply h-8 px-3 text-sm;
     }
 
+    /* The same height as .button-small, so a row of fields and a button that
+       filters them stays one line of controls rather than two sizes of one. */
+    .field-small {
+        @apply h-8 px-2 text-sm;
+    }
+
     .button:hover {
         @apply border-ink-muted bg-ink-muted;
     }
