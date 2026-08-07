@@ -43,10 +43,15 @@
                   than read, and a synopsis that wraps makes rows of two
                   different heights whose padding then reads as uneven. The name
                   is what was matched, and the whole synopsis is one click away.
+
+                  A row without a synopsis keeps the line and marks it absent,
+                  so every row in the list is the same height and the eye can
+                  travel down the names without the rhythm breaking. The mark is
+                  for the eye alone: read aloud it would only be noise.
                 */}}
-                {{if .Synopsis}}
-                <span class="block truncate text-sm text-ink-subtle">{{.Synopsis}}</span>
-                {{end}}
+                <span class="block truncate text-sm text-ink-subtle">
+                    {{- if .Synopsis}}{{.Synopsis}}{{else}}<span aria-hidden="true">—</span>{{end -}}
+                </span>
             </span>
         </a>
     </li>
