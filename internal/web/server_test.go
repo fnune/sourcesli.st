@@ -86,7 +86,7 @@ func populatedQueries() *fakeQueries {
 			{Name: "bash", Kind: "binary", Suite: "unstable", Version: "5.3-3", Synopsis: "GNU Bourne Again SHell"},
 		},
 		completions: []query.CompletePackageNamesRow{
-			{Name: "bash", Suite: "unstable", Synopsis: "GNU Bourne Again SHell"},
+			{Name: "bash", Suite: "unstable", Version: "5.3-3", Synopsis: "GNU Bourne Again SHell"},
 		},
 		suggestions: []query.SuggestSimilarPackagesRow{
 			{Name: "firefox-esr", Suite: "unstable", Synopsis: "Mozilla Firefox web browser"},
@@ -416,6 +416,9 @@ func TestCompletionReturnsLinks(t *testing.T) {
 	}
 	if !strings.Contains(response.Body.String(), `href="/p/unstable/bash"`) {
 		t.Error("completions should link to package pages")
+	}
+	if !strings.Contains(response.Body.String(), "5.3-3") {
+		t.Error("completions should show the version in the suite being searched")
 	}
 }
 

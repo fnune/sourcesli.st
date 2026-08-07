@@ -49,6 +49,7 @@ LIMIT sqlc.arg(max_results);
 SELECT
     name,
     suite,
+    version,
     synopsis,
     popularity
 FROM package_search

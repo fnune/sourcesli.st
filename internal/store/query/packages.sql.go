@@ -14,6 +14,7 @@ const completePackageNames = `-- name: CompletePackageNames :many
 SELECT
     name,
     suite,
+    version,
     synopsis,
     popularity
 FROM package_search
@@ -40,6 +41,7 @@ type CompletePackageNamesParams struct {
 type CompletePackageNamesRow struct {
 	Name       string
 	Suite      string
+	Version    string
 	Synopsis   string
 	Popularity int32
 }
@@ -60,6 +62,7 @@ func (q *Queries) CompletePackageNames(ctx context.Context, arg CompletePackageN
 		if err := rows.Scan(
 			&i.Name,
 			&i.Suite,
+			&i.Version,
 			&i.Synopsis,
 			&i.Popularity,
 		); err != nil {
