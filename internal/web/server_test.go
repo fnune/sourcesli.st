@@ -658,6 +658,22 @@ func TestImageChooserUsesTheIngestedVersions(t *testing.T) {
 	}
 }
 
+// Only stable and oldstable have released images, so the answer names the
+// release it is offering and the page says outright that testing and unstable
+// have none.
+func TestImageChooserNamesTheRelease(t *testing.T) {
+	t.Parallel()
+
+	body := get(t, newTestServer(t, populatedQueries()), "/images", nil).Body.String()
+
+	if !strings.Contains(body, "Debian 13 (trixie), the stable release") {
+		t.Error("the answer should name the release it recommends")
+	}
+	if !strings.Contains(body, "Testing and unstable have no released images") {
+		t.Error("the page should say that testing and unstable have no images")
+	}
+}
+
 // Non-live images carry no desktop, so the desktop cards grey out under an
 // overlay whose call to action is a plain label for the live radio: clicking
 // it switches the flavour with no JavaScript beyond htmx's refresh.

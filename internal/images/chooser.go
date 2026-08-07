@@ -25,9 +25,12 @@ const (
 	fallbackOldstableVersion = "12.15.0"
 )
 
+// Every image the chooser offers is a released Debian, and the label says
+// which: a reader who wants testing or unstable is told on the page that no
+// released images exist for them, rather than left to infer it.
 const (
-	stableRelease    = "Debian 13 (trixie)"
-	oldstableRelease = "Debian 12 (bookworm)"
+	stableRelease    = "Debian 13 (trixie), the stable release"
+	oldstableRelease = "Debian 12 (bookworm), the oldstable release"
 )
 
 // Versions is what ingest last observed on cdimage. Zero values fall back to

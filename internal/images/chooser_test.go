@@ -60,6 +60,9 @@ func TestI386ComesFromTheOldstableArchive(t *testing.T) {
 		t.Errorf("Filename = %q, want the oldstable version in it", got.Filename)
 	}
 
+	if !strings.Contains(got.Release, "oldstable") {
+		t.Errorf("Release = %q, want it to name the release the image comes from", got.Release)
+	}
 	if !strings.Contains(got.Note, "Debian 12") {
 		t.Errorf("Note = %q, want it to say this is Debian 12 and until when it is supported", got.Note)
 	}

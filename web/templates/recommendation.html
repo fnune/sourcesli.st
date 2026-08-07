@@ -1,6 +1,6 @@
 {{define "recommendation"}}
 <section id="recommendation" class="rounded-lg border border-line bg-surface p-6">
-    <p class="text-sm text-ink-subtle">{{.Recommendation.Release}}</p>
+    <p class="text-sm font-medium text-ink-muted">{{.Recommendation.Release}}</p>
     <h2 class="mt-1 text-xl font-semibold">{{.Recommendation.Title}}</h2>
     {{if .Recommendation.Note}}
     <p class="mt-2 text-sm text-ink-muted">{{.Recommendation.Note}}</p>
