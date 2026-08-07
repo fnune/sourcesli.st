@@ -135,6 +135,7 @@
       disabled and a filtered view has a shareable URL.
     */}}
     <form class="mt-3 flex flex-wrap items-center gap-2 text-sm"
+          hx-swap="innerHTML show:none"
           action="/p/{{.Suite}}/{{.Name}}" method="get">
         <label for="bugs-status">Status</label>
         <select class="field field-small w-auto" id="bugs-status" name="bugs">
@@ -223,7 +224,9 @@
     {{if .BugsMoreN}}
     <p class="mt-2 text-sm">
         <a class="underline"
-           href="/p/{{.Suite}}/{{.Name}}?bugs={{.BugStatus}}&severity={{.BugSeverity}}&n={{.BugsMoreN}}#bugs">
+           href="/p/{{.Suite}}/{{.Name}}?bugs={{.BugStatus}}&severity={{.BugSeverity}}&n={{.BugsMoreN}}#bugs"
+           hx-get="/p/{{.Suite}}/{{.Name}}?bugs={{.BugStatus}}&severity={{.BugSeverity}}&n={{.BugsMoreN}}"
+           hx-target="body" hx-swap="innerHTML show:none" hx-push-url="true">
             Show more</a>
         <span class="text-ink-subtle">&middot; showing {{len .Bugs}}</span>
     </p>
