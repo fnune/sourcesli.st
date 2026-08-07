@@ -146,6 +146,22 @@ func TestIndexListsPopularApplications(t *testing.T) {
 	}
 }
 
+// A heading above the field said what the field already is, and it vanished on
+// the first keystroke. The field carries its own label instead, on every page
+// the form appears on.
+func TestSearchFieldCarriesItsOwnLabel(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestServer(t, populatedQueries())
+
+	for _, target := range []string{"/", "/search?q=bash"} {
+		body := get(t, handler, target, nil).Body.String()
+		if !strings.Contains(body, `placeholder="Search Debian packages`) {
+			t.Errorf("%s does not label the search field in its placeholder", target)
+		}
+	}
+}
+
 // Thumbnails are served from our own database with cache headers; hotlinking
 // screenshots.debian.net would make every visitor a load on Debian.
 func TestScreenshotsAreServedFromOurDatabase(t *testing.T) {
