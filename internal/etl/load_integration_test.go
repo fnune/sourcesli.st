@@ -169,11 +169,11 @@ func newLoader(t *testing.T, pool *pgxpool.Pool) *etl.Loader {
 	return etl.NewLoader(pool, transforms, seed, discardLogger())
 }
 
-func count(t *testing.T, pool *pgxpool.Pool, statement string) int {
+func count(t *testing.T, pool *pgxpool.Pool, statement string, args ...any) int {
 	t.Helper()
 
 	var total int
-	if err := pool.QueryRow(t.Context(), statement).Scan(&total); err != nil {
+	if err := pool.QueryRow(t.Context(), statement, args...).Scan(&total); err != nil {
 		t.Fatalf("counting with %q: %v", statement, err)
 	}
 	return total
@@ -464,28 +464,51 @@ func TestLoadFlagsApplications(t *testing.T) {
 	}
 }
 
-// A desktop's default applications inherit the desktop's install base, so a
-// package pulled in by a popular metapackage is unflagged: the front page is
-// for what people chose, not what came with GNOME.
-func TestLoadUnflagsMetapackageDefaults(t *testing.T) {
+// A desktop's built-in applications inherit the desktop's install base, so the
+// transform walks out from the tasksel desktop tasks and unflags what it
+// reaches: the front page is for what people chose, not what came with Xfce.
+//
+// The walk has to stop in three places, and each of them is a package the front
+// page would otherwise lose: an alternative is a choice and not a default, a
+// task's recommendation is a curated extra unless the package's own section
+// says it belongs to the desktop, and an application's dependencies are its own
+// rather than the desktop's.
+func TestLoadUnflagsDesktopBuiltins(t *testing.T) {
 	pool := requireDatabase(t)
 	migrateFresh(t, pool)
 	seedUpstream(t, pool)
 
 	statements := []string{
+		// Everything below tasksel is a GUI program with a screenshot, which is
+		// what pass one flags; the walk decides which of them the desktop owns.
 		`INSERT INTO udd_raw.packages
-			(package, version, architecture, source, description, distribution, release, component,
-			 section, priority, depends)
+			(package, version, architecture, source, description, distribution, release,
+			 component, section, priority, depends, recommends)
 		 VALUES
-			('galaxy', '1.0-1', 'amd64', 'galaxy', E'browse the galaxy\n A GUI.', 'debian', 'sid',
-			 'main', 'graphics', 'optional', 'libgtk-4-1 (>= 4.14), libc6'),
-			('desktop-core', '1.0', 'amd64', 'desktop-core', 'metapackage', 'debian', 'sid',
-			 'main', 'metapackages', 'optional', 'galaxy, dbus')`,
+			('task-galaxy-desktop', '1.0', 'amd64', 'tasksel', 'the galaxy desktop', 'debian',
+			 'sid', 'main', 'tasks', 'optional', 'galaxy-core', 'galaxy-term, paintbox'),
+			('galaxy-core', '1.0', 'amd64', 'galaxy', 'the galaxy desktop, core', 'debian',
+			 'sid', 'main', 'metapackages', 'optional', 'starmap',
+			 'comet-browser | paintbox'),
+			('starmap', '1.0-1', 'amd64', 'starmap', E'map of the galaxy\n A GUI.', 'debian',
+			 'sid', 'main', 'x11', 'optional', 'libgtk-4-1 (>= 4.14)', 'tagger'),
+			('galaxy-term', '1.0-1', 'amd64', 'galaxy-term', E'terminal emulator\n A GUI.',
+			 'debian', 'sid', 'main', 'x11', 'optional', 'libgtk-4-1 (>= 4.14)', ''),
+			('tagger', '1.0-1', 'amd64', 'tagger', E'audio tag editor\n A GUI.', 'debian',
+			 'sid', 'main', 'sound', 'optional', 'libgtk-4-1 (>= 4.14)', ''),
+			('paintbox', '1.0-1', 'amd64', 'paintbox', E'paint program\n A GUI.', 'debian',
+			 'sid', 'main', 'graphics', 'optional', 'libgtk-4-1 (>= 4.14)', ''),
+			('comet-browser', '1.0-1', 'amd64', 'comet', E'web browser\n A GUI.', 'debian',
+			 'sid', 'main', 'web', 'optional', 'libgtk-4-1 (>= 4.14)', ''),
+			('old-starmap', '1.0-1', 'amd64', 'starmap',
+			 E'transitional package for starmap\n A GUI.', 'debian', 'sid', 'main', 'x11',
+			 'optional', 'libgtk-4-1 (>= 4.14)', '')`,
 		`INSERT INTO udd_raw.screenshots (package, screenshot_url, small_image_url)
-		 VALUES ('galaxy', 'https://screenshots.debian.net/galaxy',
-			 'https://screenshots.debian.net/thumbnail/galaxy')`,
+		 SELECT package, 'https://screenshots.debian.net/' || package,
+			'https://screenshots.debian.net/thumbnail/' || package
+		 FROM udd_raw.packages WHERE section <> 'tasks'`,
 		`INSERT INTO udd_raw.popcon (package, insts, vote, recent)
-		 VALUES ('galaxy', 900, 800, 100), ('desktop-core', 800, 10, 10)`,
+		 SELECT package, 900, 800, 100 FROM udd_raw.packages`,
 	}
 	for _, statement := range statements {
 		if _, err := pool.Exec(t.Context(), statement); err != nil {
@@ -497,9 +520,24 @@ func TestLoadUnflagsMetapackageDefaults(t *testing.T) {
 		t.Fatalf("loading: %v", err)
 	}
 
-	if got := count(t, pool, `SELECT count(*) FROM package_search
-		WHERE name = 'galaxy' AND application`); got != 0 {
-		t.Error("a package depended on by a popular metapackage should not be flagged")
+	for _, want := range []struct {
+		name        string
+		application bool
+		why         string
+	}{
+		{"starmap", false, "a package the desktop depends on is a built-in"},
+		{"galaxy-term", false, "a package the task recommends from a desktop section is a built-in"},
+		{"paintbox", true, "a package the task recommends from its own section is a curated extra"},
+		{"comet-browser", true, "a package offered as one of several alternatives was chosen"},
+		{"tagger", true, "the walk stops at an application: its dependencies are its own"},
+		{"old-starmap", false, "a transitional package is not an application"},
+	} {
+		got := count(t, pool, `SELECT count(*) FROM package_search
+			WHERE name = $1 AND kind = 'binary' AND application`, want.name)
+		if (got == 1) != want.application {
+			t.Errorf("%s: application = %t, want %t (%s)",
+				want.name, got == 1, want.application, want.why)
+		}
 	}
 }
 

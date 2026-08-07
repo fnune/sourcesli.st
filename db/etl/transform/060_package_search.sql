@@ -21,9 +21,9 @@
 -- broad but noisy (libraries have joke screenshots), and dependency sniffing
 -- catches GUI programs but also desktop plumbing. A package qualifies when it
 -- has a screenshot plus a GUI toolkit dependency, or carries the
--- graphical-program debtags, minus libraries and a denylist of
--- desktop-infrastructure name patterns. Tune the denylist when the front page
--- surfaces plumbing again.
+-- graphical-program debtags, minus libraries, transitional packages and a
+-- denylist of desktop-infrastructure name patterns. Tune the denylist when the
+-- front page surfaces plumbing again.
 INSERT INTO package_search__new (
     name, kind, suite, version, synopsis, popularity, votes, application, document
 )
@@ -46,8 +46,11 @@ SELECT
             || '|xfce4-(notifyd|session|settings|panel|power)'
             || '|xfwm|xfdesktop|mutter|kwin|baloo|kactivit|polkit-|speech-'
             || '|kio-|qml6?-module|gir1|mate-polkit|kinfocenter)'
-            || '|-(plugins?|volman)$'
+            || '|-(plugins?|volman|runtime)$'
         )
+        -- A package kept only so an upgrade pulls its replacement in. It has
+        -- the screenshots and the dependencies of the program it used to be.
+        AND bool_and(b.synopsis !~* 'transitional')
         AND (
             (
                 EXISTS (
@@ -82,32 +85,116 @@ LEFT JOIN popcon__new AS p ON p.package = b.name
 GROUP BY b.name, b.suite
 ON CONFLICT (name, kind, suite) DO NOTHING;
 
--- A desktop environment's default applications inherit the environment's whole
--- install base, so ranking by votes would list what ships with GNOME rather
--- than what people chose. A package pulled in by a popular metapackage
--- (gnome-core, kde-standard) is unflagged; the threshold spares niche
--- metapackages, which is what keeps firefox-esr in despite reform-desktop-full
--- depending on it. Runs as a second pass so the expensive dependency match
--- only touches the few thousand flagged rows.
+-- A desktop environment's built-in applications inherit the environment's whole
+-- install base, so ranking by votes would list what ships with Xfce rather than
+-- what people chose. Finding them means walking the dependency graph out from
+-- each desktop, which is what the next three statements do.
+--
+-- Only unconditional relationships are edges. An alternative (`firefox-esr |
+-- chromium | ...`) is the packaging telling us a choice was made, and the
+-- choice is exactly what the front page is trying to show; following it would
+-- drop firefox-esr, which gnome-core recommends that way. Recommends are edges
+-- because apt installs them by default, and Debian puts most of a desktop's
+-- applications there rather than in Depends.
+CREATE TEMP TABLE desktop_edges AS
+SELECT DISTINCT
+    b.suite,
+    b.name AS parent,
+    -- `libfoo (>= 1.2) [amd64] <!nocheck>` -> `libfoo`
+    trim(regexp_replace(split_part(relation, '[', 1), '[(:<].*$', '')) AS child,
+    field.required
+FROM
+    binary_packages__new AS b,
+    LATERAL (VALUES (b.depends, true), (b.recommends, false))
+        AS field (list, required),
+    unnest(string_to_array(field.list, ',')) AS relation
+WHERE relation NOT LIKE '%|%' AND trim(relation) <> '';
+
+CREATE INDEX ON desktop_edges (suite, parent);
+ANALYZE desktop_edges;
+
+-- Walking out from the tasksel desktop tasks, because those are what a Debian
+-- installation actually offers to install: whatever they reach is what a person
+-- gets without asking for it by name.
+--
+-- The tasks themselves are curated bundles, not desktops. task-kde-desktop
+-- recommends gimp, which nobody would call part of KDE, so a package the task
+-- merely recommends is only a starting point when its own section says it
+-- belongs to a desktop. Anything the task depends on is the desktop by
+-- definition.
+--
+-- The walk stops at applications. Once it reaches a program a person runs, that
+-- program's dependencies are its own business: ark pulls in unar, gimp pulls in
+-- graphviz, and neither says anything about the desktop that recommended them.
+CREATE TEMP TABLE desktop_builtins AS
+WITH RECURSIVE roots AS (
+    SELECT DISTINCT
+        e.suite,
+        e.child AS name
+    FROM binary_packages__new AS t
+    INNER JOIN desktop_edges AS e ON e.parent = t.name AND e.suite = t.suite
+    WHERE
+        t.section = 'tasks'
+        AND t.name ~ '(^|-)desktop$'
+        AND (
+            e.required
+            OR EXISTS (
+                SELECT 1
+                FROM binary_packages__new AS b
+                WHERE
+                    b.name = e.child
+                    AND b.suite = e.suite
+                    AND b.section IN ('gnome', 'kde', 'xfce', 'x11')
+            )
+        )
+),
+
+-- The depth bound is a cycle guard, not a tuning knob: Debian has dependency
+-- loops and the walk runs dry well before ten hops.
+reachable (suite, name, depth) AS (
+    SELECT
+        suite,
+        name,
+        0
+    FROM roots
+    UNION
+    SELECT
+        e.suite,
+        e.child,
+        r.depth + 1
+    FROM reachable AS r
+    INNER JOIN desktop_edges AS e ON e.parent = r.name AND e.suite = r.suite
+    WHERE
+        r.depth < 10
+        AND NOT EXISTS (
+            SELECT 1
+            FROM package_search__new AS ps
+            WHERE
+                ps.name = r.name
+                AND ps.suite = r.suite
+                AND ps.kind = 'binary'
+                AND ps.application
+        )
+)
+
+SELECT DISTINCT
+    suite,
+    name
+FROM reachable;
+
+CREATE INDEX ON desktop_builtins (suite, name);
+ANALYZE desktop_builtins;
+
 UPDATE package_search__new AS ps
 SET application = false
+FROM desktop_builtins AS d
 WHERE
-    ps.kind = 'binary'
-    AND ps.application
-    AND EXISTS (
-        SELECT 1
-        FROM binary_packages__new AS m
-        INNER JOIN popcon__new AS pm ON pm.package = m.name
-        WHERE
-            m.suite = ps.suite
-            AND m.section = 'metapackages'
-            AND pm.installed > 500
-            AND m.depends ~ (
-                '\m'
-                || regexp_replace(ps.name, '([^[:alnum:]])', '\\\1', 'g')
-                || '\M'
-            )
-    );
+    d.suite = ps.suite
+    AND d.name = ps.name
+    AND ps.kind = 'binary'
+    AND ps.application;
+
+DROP TABLE desktop_edges, desktop_builtins;
 
 -- Popcon counts installations of binary packages, so a source package's
 -- popularity is that of the most installed binary built from it. Joining the
