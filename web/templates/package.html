@@ -139,7 +139,7 @@
             <option value="{{.}}" {{if eq (printf "%s" .) $.BugSeverity}}selected{{end}}>{{.}}</option>
             {{end}}
         </select>
-        <button class="rounded-md bg-accent px-4 py-2 text-on-accent" type="submit">Filter</button>
+        <button class="button" type="submit">Filter</button>
     </form>
 
     {{if .Bugs}}

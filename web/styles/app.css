@@ -82,9 +82,17 @@
    default, because the autocompletion panel below it needs the two to read as
    one control. */
 @layer components {
+    /* A select's default line height is not the page's, so without leading
+       stated here the suite control comes out shorter than the field beside
+       it. The button carries the same metrics for the same reason. */
     .field {
         @apply w-full rounded-md border border-line-strong bg-surface px-3 py-2
-        text-ink outline-none;
+        leading-6 text-ink outline-none;
+    }
+
+    .button {
+        @apply rounded-md border border-accent bg-accent px-4 py-2 leading-6
+        text-on-accent;
     }
 
     .field:focus {
