@@ -185,7 +185,19 @@ func (s *DumpSource) fetch(ctx context.Context, state UpstreamState) (Snapshot, 
 		return Snapshot{}, "", fmt.Errorf("requesting the dump: upstream answered %s", response.Status)
 	}
 
-	written, err := writeAtomically(cached, response.Body)
+	written, err := writeAtomically(cached, &progressReader{
+		reader:     response.Body,
+		total:      response.ContentLength,
+		interval:   15 * time.Second,
+		lastReport: time.Now(),
+		report: func(read, total int64) {
+			attributes := []any{slog.Int64("bytes", read)}
+			if total > 0 {
+				attributes = append(attributes, slog.Int64("percent", read*100/total))
+			}
+			s.logger.InfoContext(ctx, "downloading the dump", attributes...)
+		},
+	})
 	if err != nil {
 		return Snapshot{}, "", fmt.Errorf("saving the dump: %w", err)
 	}
@@ -198,6 +210,33 @@ func (s *DumpSource) fetch(ctx context.Context, state UpstreamState) (Snapshot, 
 		ETag:         response.Header.Get("ETag"),
 		LastModified: response.Header.Get("Last-Modified"),
 	}, cached, nil
+}
+
+// progressReader says how far along a transfer is, no more often than interval.
+// Nothing else is logged between the request and the restore, so a 2.4 GiB
+// download over a slow link is otherwise indistinguishable from a hang.
+//
+// Reporting is driven by reads rather than by a clock of its own: a transfer
+// that has genuinely stalled should stop reporting, not keep printing the same
+// number.
+type progressReader struct {
+	reader     io.Reader
+	total      int64
+	interval   time.Duration
+	report     func(read, total int64)
+	read       int64
+	lastReport time.Time
+}
+
+func (p *progressReader) Read(buffer []byte) (int, error) {
+	read, err := p.reader.Read(buffer)
+	p.read += int64(read)
+
+	if time.Since(p.lastReport) >= p.interval {
+		p.lastReport = time.Now()
+		p.report(p.read, p.total)
+	}
+	return read, err
 }
 
 // writeAtomically streams into a temporary file and renames it into place, so
