@@ -1,6 +1,6 @@
 # Contributing
 
-How to build, run, test, and deploy `sourcesli.st`. [README.md](README.md) says what the site is for, and [engineering/README.md](engineering/README.md) holds the principles, the strictness rules, the dependency budget, and the commit conventions this repository holds itself to. Read that one first.
+How to build, run, test, and deploy `sourcesli.st`. [README.md](README.md) says what the site is for, and [engineering/README.md](engineering/README.md) has the rules the code follows. Read that one first.
 
 ## Architecture
 
@@ -27,11 +27,11 @@ nix/               package, images, checks, dev environment
 
 ### Routes
 
-- `/` lists every image Debian publishes for these machines, grouped by hardware, with search above it. It contacts nothing: filenames and URLs are derived from Debian's directory layout and the point release ingest observed. `/images` redirects here.
+- `/` lists every image Debian publishes for these machines, grouped by hardware, with search above it. It contacts nothing: filenames and URLs are worked out from Debian's directory layout and the point release ingest saw. `/images` redirects here.
 - `/d/{image}` is one image: what it lands as, and the checksum and signature to check it against.
 - `/search` searches binary and source packages, with htmx autocompletion over a form that works without it, and offers near names when a query matches nothing.
 - `/p/{suite}/{name}` shows versions per architecture, dependencies, the source package, and bugs filterable by status and severity. Source-only packages get the same page built from their source record.
-- `/b/{number}` redirects to the bug in the BTS, which holds the live record a page here could only snapshot.
+- `/b/{number}` redirects to the bug in the BTS, which has the live record. A page here could only show a copy of it.
 - `/healthz` answers 200 while the database is reachable. An empty database is healthy; an unreachable one is not.
 
 ## Development
@@ -46,7 +46,7 @@ direnv users can instead create a git-ignored `.envrc` containing `use flake`.
 
 The shell carries `just`, and the justfile names every command below. `just --list` is the index.
 
-The database runs in a container; the web tier runs from source against it, so a code change costs a restart rather than an image build.
+The database runs in a container and the web tier runs from source against it, so a code change costs a restart rather than an image build.
 
 ```sh
 just dev
@@ -56,7 +56,7 @@ That starts the database, applies migrations and seed data, and serves on `http:
 
 The two halves are separate recipes when you want them: `just up` for the database and schema alone, `just web` to serve against a database that is already up.
 
-The database is published on `127.0.0.1:15432`, an uncommon port so it never loses a race against a system Postgres. It runs in a rootless podman pod on a private network, reachable on the loopback interface only, with state in a named volume.
+The database is published on `127.0.0.1:15432`, an uncommon port so it does not clash with a Postgres already on your machine. It runs in a rootless podman pod on a private network, reachable on the loopback interface only, with state in a named volume.
 
 A fresh database has the schema and the suites but no packages, so the site renders empty until you fill it.
 
@@ -98,7 +98,7 @@ just check   # format check, lint, tests; exactly what CI runs
 
 `just test` and `just lint` are the tighter loop, and `just vuln` runs the scan CI keeps outside `nix flake check`.
 
-Tests come at three levels: pure tests for the domain and the ISO chooser, handler tests against the real router and templates with a fake query layer, and ETL tests against a real Postgres. The ETL tests are skipped without a database, because what they check is what a fake cannot judge: that the transform SQL runs, the indexes rebuild, and the swap publishes.
+Tests come at three levels: pure tests for the domain and the ISO chooser, handler tests against the real router and templates with a fake query layer, and ETL tests against a real Postgres. The ETL tests are skipped when there is no database, because they check things a fake cannot: that the transform SQL runs, the indexes rebuild, and the swap publishes.
 
 ```sh
 just test-all   # every test, ETL included
@@ -118,7 +118,7 @@ CI regenerates both and fails on any diff. The formatter excludes them, so they 
 
 ### Upstream
 
-Ingest is a separate, deliberate step because it downloads the whole UDD dump, 2.4 GiB as of August 2026. A second run against an unchanged dump transfers no body and rebuilds nothing, unless the tables it published are gone, in which case it rebuilds them rather than reporting success over an empty site.
+Ingest is a separate step on purpose, because it downloads the whole UDD dump, 2.4 GiB as of August 2026. A second run against an unchanged dump transfers no body and rebuilds nothing. The exception is when the tables it published are gone: then it rebuilds them, rather than reporting success over an empty site.
 
 Tests and CI never contact Debian: `internal/images` and `internal/domain` are pure, and the ETL is exercised against a restored dump rather than against upstream.
 
@@ -147,4 +147,4 @@ Both binaries read the environment and refuse to start when anything required is
 
 The ingest role must be able to create and drop the scratch database, create the `pg_trgm`, `fuzzystrmatch`, and `postgres_fdw` extensions, and define a foreign server. Grant exactly that; do not run it as a superuser for convenience.
 
-Ingest is a job, not a service. Scheduling, retries, and backoff belong to whatever runs it, never faster than upstream publishes.
+Ingest is a job, not a service. Whatever runs it owns scheduling, retries, and backoff, and must never run it faster than upstream publishes.
