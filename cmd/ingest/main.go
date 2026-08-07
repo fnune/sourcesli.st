@@ -58,6 +58,11 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		return fmt.Errorf("migrating the database: %w", err)
 	}
 
+	seed, err := subFS("db/seed")
+	if err != nil {
+		return err
+	}
+
 	host, port, user, password, _, err := store.ConnectionSettingsFrom(config.databaseURL)
 	if err != nil {
 		return err
@@ -96,10 +101,6 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	}
 
 	transforms, err := subFS("db/etl/transform")
-	if err != nil {
-		return err
-	}
-	seed, err := subFS("db/seed")
 	if err != nil {
 		return err
 	}

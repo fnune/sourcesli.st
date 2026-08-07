@@ -103,16 +103,20 @@ func (l *Loader) Load(ctx context.Context) (int64, error) {
 	return rows, nil
 }
 
-// applySeed loads the data we own rather than derive, which the transform
+func (l *Loader) applySeed(ctx context.Context) error {
+	return ApplySeed(ctx, l.pool, l.seed)
+}
+
+// ApplySeed loads the data we own rather than derive, which the transform
 // queries join against. Suites in particular must exist before any transform
 // runs, because a package whose release matches no suite is dropped.
-func (l *Loader) applySeed(ctx context.Context) error {
-	statements, err := readSQLDir(l.seed)
+func ApplySeed(ctx context.Context, pool *pgxpool.Pool, seed fs.FS) error {
+	statements, err := readSQLDir(seed)
 	if err != nil {
 		return err
 	}
 	for _, statement := range statements {
-		if _, err := l.pool.Exec(ctx, statement.sql); err != nil {
+		if _, err := pool.Exec(ctx, statement.sql); err != nil {
 			return fmt.Errorf("%s: %w", statement.name, err)
 		}
 	}

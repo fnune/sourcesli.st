@@ -121,6 +121,11 @@ func (p *Pipeline) Run(ctx context.Context) (Result, error) {
 		return Result{}, fmt.Errorf("reading upstream state: %w", err)
 	}
 
+	state, err = p.discardStateIfDataIsGone(ctx, state)
+	if err != nil {
+		return Result{}, err
+	}
+
 	runID, err := p.beginRun(ctx, startedAt)
 	if err != nil {
 		return Result{}, fmt.Errorf("recording the start of a sync run: %w", err)
@@ -172,6 +177,32 @@ func (p *Pipeline) run(ctx context.Context, state UpstreamState) (Result, error)
 		slog.Int64("rows", rows))
 
 	return Result{Outcome: OutcomeUpdated, RowsWritten: rows, Snapshot: snapshot}, nil
+}
+
+// discardStateIfDataIsGone forgets what the last run consumed when the rows it
+// produced are no longer there. Kept because a conditional request carrying that
+// state answers 304, which publishes nothing and reports success.
+func (p *Pipeline) discardStateIfDataIsGone(
+	ctx context.Context,
+	state UpstreamState,
+) (UpstreamState, error) {
+	if state.ETag == "" && state.LastModified == "" {
+		return state, nil
+	}
+
+	var published bool
+	if err := p.pool.QueryRow(
+		ctx, `SELECT EXISTS (SELECT 1 FROM binary_packages)`,
+	).Scan(&published); err != nil {
+		return UpstreamState{}, fmt.Errorf("checking whether the live tables hold data: %w", err)
+	}
+	if published {
+		return state, nil
+	}
+
+	p.logger.WarnContext(ctx, "upstream state describes data the database no longer holds, rebuilding",
+		slog.String("discarded_etag", state.ETag))
+	return UpstreamState{}, nil
 }
 
 func (p *Pipeline) readUpstreamState(ctx context.Context) (UpstreamState, error) {

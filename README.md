@@ -63,18 +63,44 @@ direnv users can instead create a git-ignored `.envrc` containing `use flake`.
 
 The shell carries `just`, and the justfile names every command below. `just --list` is the index.
 
-Start the whole environment, building images and all:
+The database runs in a container; the web tier runs from source against it, so a code change costs a restart rather than an image build.
 
 ```sh
-just up
+just up    # start the database, apply migrations and seed data
+just web   # go run ./cmd/web, on http://127.0.0.1:8080
 ```
 
-The site is then on `http://127.0.0.1:8080`. Services run in a rootless podman pod on a private network, published only on the loopback interface, with state in named volumes.
+The database is published on `127.0.0.1:15432`, an uncommon port so it never loses a race against a system Postgres. It runs in a rootless podman pod on a private network, reachable on the loopback interface only, with state in a named volume.
 
-Destroy it completely, leaving no trace on the host:
+`just up` is safe to rerun and needs no network. It leaves you with a schema, the suites, and no packages.
+
+### Data
+
+A database with no packages renders an empty site. Three ways to fill it, cheapest first:
 
 ```sh
-just down
+just restore   # load the newest snapshot from .dev/snapshots: minutes, offline
+just ingest    # one real ETL pass; the first downloads 2.4 GiB into .dev/cache
+just snapshot  # write the current database to a new timestamped snapshot
+```
+
+Snapshots are timestamped and never overwritten, so taking one can't destroy an earlier one. `just restore` picks the newest unless you name a file.
+
+### Stopping and destroying
+
+```sh
+just stop   # stop the containers, keeping the database
+just down   # destroy containers, volumes, and images; prompts first
+```
+
+`just down` deletes everything ingested. It asks before doing so, and `--yes` skips the question. It leaves `.dev/` alone, so the dump cache and your snapshots survive a teardown.
+
+### The container stack
+
+`just up` does not run the web tier in a container. To check the image that actually ships:
+
+```sh
+just stack   # builds the images, runs web in a container on http://127.0.0.1:18080
 ```
 
 ### Checks
@@ -89,11 +115,10 @@ just check   # format check, lint, tests; exactly what CI runs
 Tests come at three levels: pure tests for the domain and the ISO chooser, handler tests against the real router and templates with a fake query layer, and ETL tests against a real Postgres. The ETL tests are skipped without a database, because what they check is what a fake cannot judge: that the transform SQL runs, the indexes rebuild, and the swap publishes.
 
 ```sh
-export TEST_DATABASE_URL='postgres://user@host/database'
-just test
+just test-all   # every test, ETL included
 ```
 
-Any Postgres with the `pg_trgm` and `postgres_fdw` extensions works. The tests drop and recreate the `public` schema, so point them at a disposable database.
+That runs the ETL tests against a `sourceslist_test` database it creates beside the development one, because they drop and recreate the `public` schema. Never point `TEST_DATABASE_URL` at a database whose contents you want.
 
 ### Generated files
 
@@ -105,15 +130,9 @@ just generate
 
 CI regenerates both and fails on any diff. The formatter excludes them, so they stay byte-exact tool output.
 
-### Data
+### Upstream
 
-The database is empty until it is filled. Ingest is a separate, deliberate step because it downloads the whole UDD dump, 2.4 GiB as of August 2026:
-
-```sh
-just ingest
-```
-
-A second run against an unchanged dump transfers no body and rebuilds nothing.
+Ingest is a separate, deliberate step because it downloads the whole UDD dump, 2.4 GiB as of August 2026. A second run against an unchanged dump transfers no body and rebuilds nothing, unless the tables it published are gone, in which case it rebuilds them rather than reporting success over an empty site.
 
 Tests and CI never contact Debian: `internal/images` and `internal/domain` are pure, and the ETL is exercised against a restored dump rather than against upstream.
 

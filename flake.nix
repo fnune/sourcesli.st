@@ -80,7 +80,17 @@
         dev-up = {
           type = "app";
           program = nixpkgs.lib.getExe (devFor pkgs).up;
-          meta.description = "Build the images and start the development environment";
+          meta.description = "Start the development database";
+        };
+        dev-stack = {
+          type = "app";
+          program = nixpkgs.lib.getExe (devFor pkgs).stack;
+          meta.description = "Build the images and run the whole stack in containers";
+        };
+        dev-stop = {
+          type = "app";
+          program = nixpkgs.lib.getExe (devFor pkgs).stop;
+          meta.description = "Stop the containers, keeping the database";
         };
         dev-down = {
           type = "app";
