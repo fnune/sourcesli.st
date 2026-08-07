@@ -309,6 +309,22 @@
         width: 0.5rem;
     }
 
+    .shot {
+        @apply h-10 w-16 flex-none rounded border border-line-strong;
+    }
+
+    img.shot {
+        @apply object-cover;
+    }
+
+    .shot-empty {
+        @apply flex items-center justify-center text-line-strong;
+    }
+
+    .shot-empty svg {
+        @apply h-5 w-5;
+    }
+
     /* Nothing on a tile is clickable except the two controls in its footer, so
        the card itself has no hover state to mislead with. */
     .tile {
