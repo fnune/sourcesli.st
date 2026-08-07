@@ -92,6 +92,9 @@ func NewServer(queries Queries, templates, assets fs.FS, logger *slog.Logger) (*
 		return nil, fmt.Errorf("reading the stylesheet: %w", err)
 	}
 	funcs := template.FuncMap{
+		// Marked safe because it is our own build output, embedded at compile
+		// time: nothing a request carries reaches this.
+		//nolint:gosec // G203: the stylesheet is not input.
 		"stylesheet": func() template.CSS { return template.CSS(stylesheet) },
 	}
 
