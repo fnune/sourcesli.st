@@ -23,7 +23,12 @@
             hx-sync="this:replace">
 
         <label class="sr-only" for="suite">Suite</label>
-        <select class="field w-auto" id="suite" name="suite">
+        {{/*
+          Without autocomplete="off" Firefox restores whatever suite was last
+          picked when the page is reloaded, so the page says stable and the
+          control says something else.
+        */}}
+        <select class="field w-auto" id="suite" name="suite" autocomplete="off">
             {{range .Suites}}
             <option value="{{.Name}}" {{if eq .Name $.Suite}}selected{{end}}>
                 {{.Name}}{{if .Codename}} ({{.Codename}}){{end}}
