@@ -141,7 +141,10 @@ func TestIndexListsPopularApplications(t *testing.T) {
 		"Popular applications",
 		`href="/p/unstable/firefox-esr"`,
 		`src="/screenshots/firefox-esr"`,
-		"popularity contest",
+		// The list is a heuristic of ours over a denylist of ours. Crediting
+		// popcon alone would present our editing as Debian's measurement.
+		"our judgement, not Debian's",
+		"popcon.debian.org",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("index does not contain %q", want)
