@@ -19,7 +19,7 @@ Rules that bind the whole repository. [README.md](../README.md) says what the pr
 
 ### Debian data citizenship
 
-Volunteers pay for the data this project runs on, so upstream load is a design constraint. [Decision record 0001](decisions/0001-source-bulk-data-from-udd.md) holds the full reasoning.
+Volunteers pay for the data this project runs on, so upstream load is a design constraint.
 
 - A user request never causes a request to a Debian service. Upstream load stays constant, whatever our traffic.
 - Automated jobs read one source: the UDD dump at `https://udd.debian.org/dumps/udd.dump`.
@@ -27,7 +27,7 @@ Volunteers pay for the data this project runs on, so upstream load is a design c
 - Never sync faster than upstream publishes. The dump regenerates every two days.
 - Restore selectively with `pg_restore --table`. Never materialise all of UDD to read a fraction of it.
 - The rule is cost shape, not hostname: no automated job may place unbounded or bulk load on shared Debian infrastructure. The mirror at `udd-mirror.debian.net` fails that test, so nothing automated queries it. A human exploring it stays polite: read-only, one connection, a statement timeout on every query.
-- Freshness between dumps comes from `deb.debian.org`, the CDN built to be polled. Never from the mirror, never from the BTS. See [decision record 0003](decisions/0003-two-tier-freshness.md).
+- Freshness between dumps comes from `deb.debian.org`, the CDN built to be polled. Never from the mirror, never from the BTS. `fresh_binary_versions` is the overlay table that would hold those versions, kept separate from the bulk tables so that a failure there leaves the site at dump freshness. Nothing writes to it yet.
 - Do not reimplement `InRelease` verification or pdiff handling. `apt-get update` in a container already does both correctly.
 - Never scrape. `packages.debian.org`, `sources.debian.org`, `tracker.debian.org`, and the BTS web interface are for humans. Their data is in UDD.
 - Identify every connection with this exact string, as the HTTP `User-Agent` and the Postgres `application_name`:
@@ -116,12 +116,6 @@ The schema is the design.
 - No value judgements ("improve", "cleaner", "robust") and no vague qualifiers ("various", "ensure").
 - No AI attribution and no Co-Authored-By for AI tools.
 - One commit per PR by default. Squash on merge. Split larger changes at natural seams.
-
-### Decision records
-
-- Choices that are expensive to reverse go in `engineering/decisions/` as numbered records: context, decision, consequences.
-- A record is superseded, never edited into a lie.
-- Anything touching how we read Debian data gets a record.
 
 ### Continuous integration
 

@@ -42,7 +42,6 @@ The rule this shape exists to keep: a visit to the site never causes a request t
 
 The trade is that the data is as old as the last dump. We prefer showing slightly stale data over adding load upstream, and the footer on every page says when the data was last updated.
 
-[Decision record 0001](engineering/decisions/0001-source-bulk-data-from-udd.md) explains why the dump beats every other source of this data.
 
 ## What it does not do
 
