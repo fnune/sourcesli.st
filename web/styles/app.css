@@ -483,10 +483,19 @@
        and the last one must not trail one.
        It trails the phrase it follows rather than leading the next one: the
        line wraps between phrases, and a leading separator would then be left
-       dangling at the start of the wrapped line. */
+       dangling at the start of the wrapped line.
+       The separator carries the space between phrases, so the gap between them
+       is only what keeps it off the words on either side. A wrapped line needs
+       more room than that: the phrases below sit under the words above rather
+       than beside them, and the same gap in both directions would read as one
+       block of text. */
+    .facts {
+        @apply flex flex-wrap items-center gap-x-1 gap-y-1.5;
+    }
+
     .facts > *:not(:last-child)::after {
         content: "·";
-        @apply ml-1.5 text-line-strong;
+        @apply ml-1 text-line-strong;
     }
 
     /* One grid for the whole page: a wide column and a narrow one. Everything
