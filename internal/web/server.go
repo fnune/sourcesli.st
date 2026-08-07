@@ -243,24 +243,43 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := searchData{layoutData: layout}
-	if strings.TrimSpace(layout.Query) != "" {
-		limit := requestedLimit(r, searchResultLimit, searchResultMax)
-		results, err := s.queries.SearchPackages(r.Context(), query.SearchPackagesParams{
-			Suite:      layout.Suite,
-			Query:      layout.Query,
-			MaxResults: limit,
-		})
-		if err != nil {
-			s.serverError(w, r, fmt.Errorf("searching packages: %w", err))
-			return
-		}
-		data.Results = results
-		data.MoreN = nextLimit(len(results), limit, searchResultMax)
-		data.Truncated = len(results) == searchResultMax
+	// An empty query has nothing to say beyond what the front page already
+	// says, and a results page with no query in it reads as a failure.
+	if strings.TrimSpace(layout.Query) == "" {
+		http.Redirect(w, r, indexFor(layout.Suites, layout.Suite), http.StatusSeeOther)
+		return
 	}
 
-	s.render(w, r, "search.html", http.StatusOK, data)
+	limit := requestedLimit(r, searchResultLimit, searchResultMax)
+	results, err := s.queries.SearchPackages(r.Context(), query.SearchPackagesParams{
+		Suite:      layout.Suite,
+		Query:      layout.Query,
+		MaxResults: limit,
+	})
+	if err != nil {
+		s.serverError(w, r, fmt.Errorf("searching packages: %w", err))
+		return
+	}
+
+	s.render(w, r, "search.html", http.StatusOK, searchData{
+		layoutData: layout,
+		Results:    results,
+		MoreN:      nextLimit(len(results), limit, searchResultMax),
+		Truncated:  len(results) == searchResultMax,
+	})
+}
+
+// indexFor keeps the reader's suite when a search sends them back to the front
+// page. The name comes from the suite list rather than from the URL, so the
+// redirect can only ever point at a suite we serve, and stable is left implicit
+// because it is the default.
+func indexFor(suites []query.Suite, selected string) string {
+	for _, suite := range suites {
+		if suite.Name == selected && suite.Name != "stable" {
+			return "/?suite=" + suite.Name
+		}
+	}
+	return "/"
 }
 
 func (s *Server) handleComplete(w http.ResponseWriter, r *http.Request) {

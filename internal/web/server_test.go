@@ -270,15 +270,32 @@ func TestSearchOffersMoreResults(t *testing.T) {
 	}
 }
 
-func TestSearchWithNoQueryDoesNotTouchTheDatabase(t *testing.T) {
+// An empty query has nothing to report, so it goes back to the front page
+// rather than rendering a results page with no results and no query in it. The
+// suite the reader had chosen survives the trip, but only a suite we serve: the
+// redirect target is a name from the suite list, never one from the URL.
+func TestSearchWithNoQueryGoesBackToTheFrontPage(t *testing.T) {
 	t.Parallel()
 
 	queries := populatedQueries()
-	response := get(t, newTestServer(t, queries), "/search", nil)
 
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", response.Code)
+	for target, want := range map[string]string{
+		"/search":                      "/",
+		"/search?q=":                   "/",
+		"/search?q=%20&suite=unstable": "/?suite=unstable",
+		"/search?q=&suite=stable":      "/",
+		"/search?q=&suite=nosuchsuite": "/",
+		"/search?q=&suite=..%2Fevil":   "/",
+	} {
+		response := get(t, newTestServer(t, queries), target, nil)
+		if response.Code != http.StatusSeeOther {
+			t.Errorf("%s status = %d, want 303", target, response.Code)
+		}
+		if got := response.Header().Get("Location"); got != want {
+			t.Errorf("%s redirected to %q, want %q", target, got, want)
+		}
 	}
+
 	if queries.searchCalledWith.Query != "" {
 		t.Error("an empty query should not run a search")
 	}

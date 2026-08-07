@@ -15,6 +15,7 @@
             name="q"
             value="{{.Query}}"
             placeholder="Search Debian packages: bash, text editor, libssl&hellip;"
+            required
             autocomplete="off"
             hx-get="/complete"
             hx-trigger="input changed delay:150ms, focus"
