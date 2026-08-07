@@ -50,16 +50,17 @@
     <div class="mx-auto max-w-4xl px-4 py-8">
         <p class="text-ink-muted">
             {{if .DataAsOf}}
-                <span class="text-ink">Updated
-                    <time datetime="{{.DataAsOf.Format "2006-01-02T15:04:05Z07:00"}}"
-                          title="{{.DataAsOf.Format "2 January 2006, 15:04 MST"}}">
-                        {{.DataAsOf.Format "2 January 2006"}}</time>.</span>
+                Updated
+                <time datetime="{{.DataAsOf.Format "2006-01-02T15:04:05Z07:00"}}"
+                      title="{{.DataAsOf.Format "2 January 2006, 15:04 MST"}}">
+                    {{.DataAsOf.Format "2 January 2006"}}</time>.
             {{else}}
-                <span class="text-ink">No data has been loaded yet.</span>
+                No data has been loaded yet.
             {{end}}
             Public Debian data under its original licences. The
             <a class="underline" href="https://www.debian.org/logos/">Debian logo{{template "outbound"}}</a> is
             &copy; SPI, Inc., under CC BY-SA 3.0.
+            {{template "disclaimer"}}
         </p>
     </div>
 </footer>
