@@ -167,6 +167,12 @@
         @apply border-accent ring-2 ring-ring;
     }
 
+    .outbound {
+        @apply ml-1 inline-block h-[0.75em] w-[0.75em] flex-none text-ink-subtle;
+        /* Sits on the baseline otherwise, which puts it a whole letter too high. */
+        vertical-align: -0.08em;
+    }
+
     /* Which suite a page is about is a fact the reader has to hold while
        reading it, so it is carried by colour rather than by a word repeated
        everywhere: the rule under the masthead, and a dot wherever a suite is

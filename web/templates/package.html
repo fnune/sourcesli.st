@@ -154,7 +154,7 @@
 
     {{if .Bugs}}
     <p class="mt-3 text-sm text-ink-subtle">Each bug opens in the
-        <a class="underline" href="https://bugs.debian.org/{{.Name}}">Debian bug tracking system</a>,
+        <a class="underline" href="https://bugs.debian.org/{{.Name}}">Debian bug tracking system{{template "outbound"}}</a>,
         which holds its message log and current state.</p>
     <ul class="mt-2 divide-y divide-line rounded-md border border-line bg-surface text-sm">
         {{range .Bugs}}
@@ -181,14 +181,10 @@
                   end of the title it belongs to, not out at the edge of the row
                   with the width of the title between them.
                 */}}
-                <a class="flex max-w-full items-center gap-1 no-underline hover:underline"
+                <a class="flex max-w-full items-center no-underline hover:underline"
                    href="https://bugs.debian.org/{{.Number}}" rel="nofollow noopener">
                     <span class="min-w-0 truncate" title="{{.Title}}">{{.Title}}</span>
-                    <svg class="h-3 w-3 flex-none text-ink-subtle" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                         stroke-linejoin="round" aria-hidden="true">
-                        <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>
-                    </svg>
+                    {{template "outbound"}}
                     <span class="sr-only">on bugs.debian.org</span>
                 </a>
                 {{/*
@@ -234,7 +230,7 @@
     {{end}}
     {{if .BugsTruncated}}
     <p class="mt-2 text-sm text-ink-muted">Showing the first {{len .Bugs}} matches. The
-        <a class="underline" href="https://bugs.debian.org/{{.Name}}">bug tracking system</a>
+        <a class="underline" href="https://bugs.debian.org/{{.Name}}">bug tracking system{{template "outbound"}}</a>
         has the full list.</p>
     {{end}}
     {{else}}
@@ -245,10 +241,10 @@
 <section class="mt-8 text-sm text-ink-muted">
     <h2 class="font-semibold">Authoritative Debian pages</h2>
     <ul class="mt-2 list-disc pl-5">
-        <li><a class="underline" href="https://tracker.debian.org/pkg/{{.SourceName}}">Package tracker</a></li>
-        <li><a class="underline" href="https://packages.debian.org/{{.Suite}}/{{.Name}}">packages.debian.org</a></li>
-        <li><a class="underline" href="https://bugs.debian.org/{{.Name}}">Bug tracking system</a></li>
-        <li><a class="underline" href="https://sources.debian.org/src/{{.SourceName}}/">Source browser</a></li>
+        <li><a class="underline" href="https://tracker.debian.org/pkg/{{.SourceName}}">Package tracker{{template "outbound"}}</a></li>
+        <li><a class="underline" href="https://packages.debian.org/{{.Suite}}/{{.Name}}">packages.debian.org{{template "outbound"}}</a></li>
+        <li><a class="underline" href="https://bugs.debian.org/{{.Name}}">Bug tracking system{{template "outbound"}}</a></li>
+        <li><a class="underline" href="https://sources.debian.org/src/{{.SourceName}}/">Source browser{{template "outbound"}}</a></li>
     </ul>
 </section>
 {{end}}

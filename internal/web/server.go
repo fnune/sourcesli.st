@@ -82,6 +82,7 @@ func NewServer(queries Queries, templates, assets fs.FS, logger *slog.Logger) (*
 	// page defines "title" and "content" under the same names.
 	shared := []string{
 		"layout.html", "searchform.html", "results.html", "packages.html", "screen.html",
+		"outbound.html",
 	}
 	pageNames := []string{
 		"index.html", "image.html", "search.html", "package.html", "message.html",
