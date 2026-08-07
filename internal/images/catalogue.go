@@ -270,7 +270,7 @@ func Catalogue(input Input) []Group {
 			Sections: []Section{
 				{
 					Title:  "Live images",
-					Detail: "Boot from USB without touching your disk.",
+					Detail: "Boot from USB without touching your disk. Installs from the same file when you're ready.",
 					Images: liveImages(input),
 				},
 				installers(ArchitectureAMD64, input),
@@ -323,11 +323,10 @@ func liveImages(input Input) []Image {
 	return images
 }
 
-// Installers differ from each other in what they carry and what they cost, so
-// unlike the live images they say so on their own tiles.
 func installers(architecture Architecture, input Input) Section {
 	return Section{
-		Title: "Installers",
+		Title:  "Just the installer",
+		Detail: "No desktop to try first. Pick your desktop partway through installing.",
 		Images: []Image{
 			netInstall(architecture, input),
 			fullDVD(architecture, input),
