@@ -4,13 +4,25 @@ database_url := "postgres://sourceslist:devonly@127.0.0.1:15432/sourceslist"
 # A database of its own: the ETL tests drop and recreate the public schema.
 test_database_url := "postgres://sourceslist:devonly@127.0.0.1:15432/sourceslist_test"
 snapshots := ".dev/snapshots"
+serve := "DATABASE_URL='" + database_url + "' LISTEN_ADDRESS=127.0.0.1:8080 go run ./cmd/web"
+# One definition, so watching cannot write a stylesheet that differs from CI's.
+build_stylesheet := "tailwindcss --input web/styles/app.css --output web/assets/app.css --minify"
 
 default:
     @just --list
 
-# Database, schema, and the web server on http://127.0.0.1:8080. Start here.
+# Database, schema, and the site on http://127.0.0.1:8080, rebuilt as you edit. Start here.
 [group('run')]
-dev: up && web
+dev: up
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{ build_stylesheet }} --watch &
+    restyling=$!
+    trap 'kill "$restyling" 2>/dev/null || true' EXIT
+    watchexec --restart --wrap-process=session --debounce 500ms \
+        --exts go,html,css --ignore 'web/styles/**' \
+        --watch cmd --watch internal --watch web \
+        -- {{ serve }}
 
 # Start the database and bring the schema up to date, without serving. Safe to rerun.
 [group('run')]
@@ -20,7 +32,7 @@ up: && migrate
 # Serve from source against a database that is already up. Ctrl-c, edit, rerun.
 [group('run')]
 web:
-    DATABASE_URL='{{ database_url }}' LISTEN_ADDRESS=127.0.0.1:8080 go run ./cmd/web
+    {{ serve }}
 
 # Apply migrations and seed data. No network, no dump, seconds.
 [group('run')]
@@ -112,4 +124,4 @@ vuln:
 [group('check')]
 generate:
     sqlc generate
-    tailwindcss --input web/styles/app.css --output web/assets/app.css --minify
+    {{ build_stylesheet }}

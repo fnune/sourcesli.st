@@ -1,0 +1,40 @@
+{{define "title"}}Checksums for {{.Image.Filename}}{{end}}
+
+{{define "content"}}
+<nav class="text-sm text-ink-subtle"><a class="underline" href="/">Download Debian</a> / {{.Image.Hardware}}</nav>
+
+{{/*
+  This page exists to answer one question: is the file that landed the file
+  Debian published. Everything a reader could get from the front page, or from
+  Debian's own manual, is left where it already is.
+*/}}
+<h1 class="mt-2 text-2xl font-semibold">{{.Image.Title}}</h1>
+<p class="mt-1 text-ink-muted">
+    {{.Image.Release}} &middot; {{.Image.Hardware}} &middot; {{.Image.Size}}
+</p>
+
+<div class="mt-6 flex flex-wrap items-center gap-4">
+    <a class="button no-underline" href="{{.Image.DownloadURL}}">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v12m0 0 5-5m-5 5-5-5M4 21h16"/>
+        </svg>
+        Download</a>
+    <span class="break-all font-mono text-sm text-ink-subtle">{{.Image.Filename}}</span>
+</div>
+
+<section class="mt-8">
+    <h2 class="text-lg font-semibold">Check what you downloaded</h2>
+    <p class="mt-2 text-ink-muted">
+        Put <a class="underline" href="{{.Image.ChecksumURL}}">SHA512SUMS</a> and
+        <a class="underline" href="{{.Image.SignatureURL}}">SHA512SUMS.sign</a>
+        beside the image, then:
+    </p>
+    <pre class="mt-2 overflow-x-auto rounded bg-muted p-3 font-mono text-xs">gpg --verify SHA512SUMS.sign SHA512SUMS
+{{.Image.VerifyCommand}}</pre>
+    <p class="mt-2 text-sm text-ink-muted">
+        Both files, and every other file for this image, live in
+        <a class="underline" href="{{.Image.DirectoryURL}}">one directory</a> on cdimage.debian.org.
+    </p>
+</section>
+{{end}}

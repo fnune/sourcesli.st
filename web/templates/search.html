@@ -1,13 +1,11 @@
 {{define "title"}}{{if .Query}}{{.Query}}{{else}}Search{{end}}{{end}}
 
 {{define "content"}}
-{{template "searchform" .}}
-
-<section class="mt-8">
+<section>
     {{if .Query}}
         <h1 class="text-lg font-semibold">
             {{len .Results}} result{{if ne (len .Results) 1}}s{{end}}
-            for <span class="font-mono">{{.Query}}</span> in <span class="font-mono">{{.Suite}}</span>
+            for <span class="font-mono">{{.Query}}</span> in <span class="suite suite-{{.Suite}} ml-1 font-mono"><span class="suite-mark"></span>{{.Suite}}</span>
         </h1>
     {{end}}
     {{template "results" .}}

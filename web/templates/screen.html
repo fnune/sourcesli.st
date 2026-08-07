@@ -1,0 +1,47 @@
+{{define "screen"}}
+{{/*
+  Every tile shows what the medium looks like once it has booted. The desktops
+  have mirrored screenshots; the rest are drawn here, because a photograph of a
+  text-mode installer is a screenshot of a rectangle. They keep their own colours
+  under either scheme: they are pictures of a fixed thing, not part of the page.
+
+  Both drawn screens are transcribed from the installer rather than paraphrased.
+  The software list is what the DVD can install with no network, which is why
+  every desktop is on it and why only the installer's own defaults are ticked.
+*/}}
+{{if .Screen.Screenshot}}
+<img class="aspect-video w-full object-cover" src="/assets/desktops/{{.Screen}}.webp"
+     alt="{{.Title}}" loading="lazy">
+{{else if eq (printf "%s" .Screen) "installer"}}
+<span class="screen screen-installer" aria-hidden="true">
+    <span class="screen-dialog">
+        <span class="screen-title">Debian GNU/Linux installer menu</span>
+        <span class="block">Install</span>
+        <span class="block">Graphical install</span>
+        <span class="block">Advanced options</span>
+        <span class="block">Accessible dark contrast installer menu</span>
+        <span class="block">Help</span>
+        <span class="block">Install with speech synthesis</span>
+    </span>
+</span>
+{{else if eq (printf "%s" .Screen) "tasksel"}}
+<span class="screen screen-installer" aria-hidden="true">
+    <span class="screen-dialog">
+        <span class="screen-title">Choose software to install</span>
+        <span class="block">[*] Debian desktop environment</span>
+        <span class="block">[*]&nbsp;&nbsp;&nbsp;&nbsp;GNOME</span>
+        <span class="block">[&nbsp;]&nbsp;&nbsp;&nbsp;&nbsp;Xfce</span>
+        <span class="block">[&nbsp;]&nbsp;&nbsp;&nbsp;&nbsp;KDE Plasma</span>
+        <span class="block">[&nbsp;]&nbsp;&nbsp;&nbsp;&nbsp;Cinnamon</span>
+        <span class="block">[&nbsp;]&nbsp;&nbsp;&nbsp;&nbsp;MATE</span>
+        <span class="block">[&nbsp;]&nbsp;&nbsp;&nbsp;&nbsp;LXDE</span>
+        <span class="block">[&nbsp;]&nbsp;&nbsp;&nbsp;&nbsp;LXQt</span>
+        <span class="block">[&nbsp;] web server</span>
+        <span class="block">[&nbsp;] SSH server</span>
+        <span class="block">[*] standard system utilities</span>
+    </span>
+</span>
+{{else}}
+<span class="screen screen-terminal" aria-hidden="true">user@debian:~$ &#9608;</span>
+{{end}}
+{{end}}

@@ -311,6 +311,40 @@ func (q *Queries) GetSourcePackage(ctx context.Context, arg GetSourcePackagePara
 	return i, err
 }
 
+const listISOSizes = `-- name: ListISOSizes :many
+SELECT
+    image,
+    bytes
+FROM iso_sizes
+`
+
+type ListISOSizesRow struct {
+	Image string
+	Bytes int64
+}
+
+// The sizes ingest last observed on cdimage, keyed by the catalogue identifier
+// the download page addresses each image by.
+func (q *Queries) ListISOSizes(ctx context.Context) ([]ListISOSizesRow, error) {
+	rows, err := q.db.Query(ctx, listISOSizes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListISOSizesRow{}
+	for rows.Next() {
+		var i ListISOSizesRow
+		if err := rows.Scan(&i.Image, &i.Bytes); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listISOVersions = `-- name: ListISOVersions :many
 SELECT
     channel,
@@ -372,6 +406,50 @@ func (q *Queries) ListPackageSuites(ctx context.Context, name string) ([]ListPac
 	for rows.Next() {
 		var i ListPackageSuitesRow
 		if err := rows.Scan(&i.Suite, &i.Version); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPackageVersions = `-- name: ListPackageVersions :many
+SELECT
+    name,
+    version
+FROM package_search
+WHERE
+    suite = $1
+    AND kind = 'binary'
+    AND name = any($2::text [])
+`
+
+type ListPackageVersionsParams struct {
+	Suite string
+	Names []string
+}
+
+type ListPackageVersionsRow struct {
+	Name    string
+	Version string
+}
+
+// The versions of a handful of named packages in one suite. The download page
+// states what a live image's desktop ships as, and this is where that number
+// comes from: our own copy of the archive rather than a constant in the code.
+func (q *Queries) ListPackageVersions(ctx context.Context, arg ListPackageVersionsParams) ([]ListPackageVersionsRow, error) {
+	rows, err := q.db.Query(ctx, listPackageVersions, arg.Suite, arg.Names)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPackageVersionsRow{}
+	for rows.Next() {
+		var i ListPackageVersionsRow
+		if err := rows.Scan(&i.Name, &i.Version); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -494,20 +572,24 @@ FROM (
         suite,
         version,
         synopsis,
-        popularity
+        popularity,
+        name LIKE lower($1::text) || '%' AS names_it
     FROM package_search
     WHERE
-        suite = $1
-        AND document @@ websearch_to_tsquery('english', $2)
+        suite = $2
+        AND (
+            document @@ websearch_to_tsquery('english', $1)
+            OR name LIKE lower($1::text) || '%'
+        )
     ORDER BY name ASC, (kind = 'binary') DESC
 ) AS deduplicated
-ORDER BY popularity DESC, name ASC
+ORDER BY names_it DESC, popularity DESC, name ASC
 LIMIT $3
 `
 
 type SearchPackagesParams struct {
-	Suite      string
 	Query      string
+	Suite      string
 	MaxResults int32
 }
 
@@ -523,11 +605,18 @@ type SearchPackagesRow struct {
 // Queries the web tier runs. Every one is bounded and served by an index
 // created in db/migrations.
 // Full-text search across package names and synopses, most popular first.
+//
+// Full-text search matches whole words, so `fire` finds "Fire an event" and not
+// firefox-esr: to Postgres those are different lexemes. A reader typing the
+// start of a name means the name, and the autocompletion beside this query
+// already behaves that way, so a prefix of a name matches here too and sorts
+// above the prose. Both halves are served by their own index.
+//
 // A name can appear as both a binary and a source package. Collapsing to one
 // row keeps a reader from seeing the same name twice with no way to tell why;
 // the binary wins because that is the page a search result links to.
 func (q *Queries) SearchPackages(ctx context.Context, arg SearchPackagesParams) ([]SearchPackagesRow, error) {
-	rows, err := q.db.Query(ctx, searchPackages, arg.Suite, arg.Query, arg.MaxResults)
+	rows, err := q.db.Query(ctx, searchPackages, arg.Query, arg.Suite, arg.MaxResults)
 	if err != nil {
 		return nil, err
 	}

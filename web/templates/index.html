@@ -2,182 +2,95 @@
 
 {{define "content"}}
 {{/*
-  The site answers two questions, and the download is the one a first-time
-  visitor came for, so it is the page. Search sits above it because it is one
-  control, and putting it anywhere else costs a click to reach.
+  The swirl rather than a word: it says whose images these are at a glance, and
+  it is the one mark on the page that is not ours. Decorative beside a heading
+  that already says Debian, so it is not announced twice.
 */}}
-{{template "searchform" .}}
-
-<h1 class="mt-10 text-2xl font-semibold">Download Debian</h1>
-{{/*
-  The page grid again, so the questions and the answer keep the edges the search
-  field above them set. The answer is sticky on wide screens, so changing a card
-  always shows its effect; on small screens it comes first.
-*/}}
-<div class="page-grid mt-6">
-
-<div class="answer-column lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1">
-{{template "recommendation" .}}
-</div>
+<h1 class="flex items-center gap-3 text-2xl font-semibold">
+    {{/* One em tall, so it matches the letters rather than the line box they
+         sit in, and follows the heading if its size ever changes. Its own width,
+         because the swirl is taller than it is wide. */}}
+    <img class="h-[1em] w-auto flex-none" src="/assets/debian.svg" alt="" aria-hidden="true">
+    Download Debian
+</h1>
 
 {{/*
-  A plain GET form with radio cards: real action, real method, no submit
-  ceremony. htmx refreshes the answer on every change; without JavaScript the
-  noscript button submits the same form to the same handler.
+  No questions and no state: the whole set is small enough to show, so a reader
+  picks their machine and reads two lines or eight. The group we think is theirs
+  comes first and says so, and nothing is hidden on the strength of a guess.
 */}}
-<form id="images-form" class="mt-8 lg:col-start-1 lg:row-start-1 lg:mt-0" action="/" method="get"
-      hx-get="/" hx-trigger="change" hx-target="#recommendation"
-      hx-select="#recommendation" hx-swap="outerHTML">
+{{range $group := .Groups}}
+<section class="mt-10">
+    <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 class="text-lg font-semibold">{{.Hardware}}</h2>
+        {{if eq .Architecture $.Detected}}
+        <span class="rounded-full bg-muted px-2 py-0.5 text-xs text-ink-muted">looks like this computer</span>
+        {{end}}
+        <span class="ml-auto text-sm text-ink-subtle">{{.Release}}</span>
+    </div>
+    <p class="mt-1 text-sm text-ink-muted">
+        {{.Detail}}{{if .Note}} &middot; {{.Note}}{{end}}
+    </p>
 
-    <fieldset>
-        <legend class="text-sm font-medium">What are you installing on?</legend>
-        <div class="mt-2 grid gap-2 sm:grid-cols-3">
-            <label class="choice">
-                <input class="sr-only" type="radio" name="arch" value="amd64"
-                       {{if eq (printf "%s" .Choice.Architecture) "amd64"}}checked{{end}}>
-                <span class="choice-card">
-                    <span class="font-medium">64-bit PC</span>
-                    <span class="mt-0.5 block text-sm text-ink-muted">Most desktops and laptops, Intel or AMD</span>
-                </span>
-            </label>
-            <label class="choice">
-                <input class="sr-only" type="radio" name="arch" value="arm64"
-                       {{if eq (printf "%s" .Choice.Architecture) "arm64"}}checked{{end}}>
-                <span class="choice-card">
-                    <span class="font-medium">64-bit ARM</span>
-                    <span class="mt-0.5 block text-sm text-ink-muted">Raspberry Pi 4 and later, ARM servers</span>
-                </span>
-            </label>
-            <label class="choice">
-                <input class="sr-only" type="radio" name="arch" value="i386"
-                       {{if eq (printf "%s" .Choice.Architecture) "i386"}}checked{{end}}>
-                <span class="choice-card">
-                    <span class="font-medium">32-bit PC</span>
-                    <span class="mt-0.5 block text-sm text-ink-muted">Hardware from before roughly 2007</span>
-                </span>
-            </label>
+    {{range $section := .Sections}}
+    <div class="mt-5">
+        <div class="flex flex-wrap items-baseline gap-x-2">
+            {{/* A label that distinguishes nothing when a group has one section. */}}
+            {{if gt (len $group.Sections) 1}}<h3 class="text-sm font-medium">{{.Title}}</h3>{{end}}
+            {{/*
+              What every image in the section shares is said here once. Six tiles
+              repeating one sentence is six times the words and none of the
+              information.
+            */}}
+            {{if .Detail}}<p class="text-sm text-ink-muted">{{.Detail}}</p>{{end}}
         </div>
-    </fieldset>
 
-    <fieldset class="mt-5">
-        <legend class="text-sm font-medium">How do you want to install?</legend>
-        <div class="mt-2 grid gap-2 sm:grid-cols-3">
-            <label class="choice">
-                <input class="sr-only" type="radio" name="flavour" value="netinst"
-                       {{if eq (printf "%s" .Choice.Flavour) "netinst"}}checked{{end}}>
-                <span class="choice-card">
-                    <span class="font-medium">Install now</span>
-                    <span class="mt-0.5 block text-sm text-ink-muted">Small download. Fetches the rest over the internet.</span>
-                </span>
-            </label>
-            <label class="choice">
-                <input class="sr-only" id="flavour-live" type="radio" name="flavour" value="live"
-                       {{if eq (printf "%s" .Choice.Flavour) "live"}}checked{{end}}>
-                <span class="choice-card">
-                    <span class="font-medium">Try it first</span>
-                    <span class="mt-0.5 block text-sm text-ink-muted">Boots a desktop from USB without touching your disk.</span>
-                </span>
-            </label>
-            <label class="choice">
-                <input class="sr-only" type="radio" name="flavour" value="dvd"
-                       {{if eq (printf "%s" .Choice.Flavour) "dvd"}}checked{{end}}>
-                <span class="choice-card">
-                    <span class="font-medium">Offline install</span>
-                    <span class="mt-0.5 block text-sm text-ink-muted">Everything on one disc. No internet needed.</span>
-                </span>
-            </label>
-        </div>
-    </fieldset>
-
-    <fieldset class="mt-5">
-        <legend class="text-sm font-medium">Which desktop?</legend>
-        <div class="relative mt-2">
-        <div class="desktop-grid grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <label class="choice">
-                <input class="sr-only" type="radio" name="desktop" value="gnome"
-                       {{if eq (printf "%s" .Choice.Desktop) "gnome"}}checked{{end}}>
-                <span class="choice-card overflow-hidden p-0">
-                    <img class="aspect-video w-full object-cover" src="/assets/desktops/gnome.webp" alt="GNOME desktop">
-                    <span class="flex items-baseline justify-between gap-2 px-3 py-2">
-                        <span class="flex-none text-sm font-medium">GNOME</span>
-                        <a class="min-w-0 truncate text-xs text-ink-subtle underline" rel="noopener" href="https://www.gnome.org/">gnome.org</a>
-                    </span>
-                </span>
-            </label>
-            <label class="choice">
-                <input class="sr-only" type="radio" name="desktop" value="kde"
-                       {{if eq (printf "%s" .Choice.Desktop) "kde"}}checked{{end}}>
-                <span class="choice-card overflow-hidden p-0">
-                    <img class="aspect-video w-full object-cover" src="/assets/desktops/kde.webp" alt="KDE Plasma desktop">
-                    <span class="flex items-baseline justify-between gap-2 px-3 py-2">
-                        <span class="flex-none text-sm font-medium">KDE Plasma</span>
-                        <a class="min-w-0 truncate text-xs text-ink-subtle underline" rel="noopener" href="https://kde.org/plasma-desktop/">kde.org</a>
-                    </span>
-                </span>
-            </label>
-            <label class="choice">
-                <input class="sr-only" type="radio" name="desktop" value="xfce"
-                       {{if eq (printf "%s" .Choice.Desktop) "xfce"}}checked{{end}}>
-                <span class="choice-card overflow-hidden p-0">
-                    <img class="aspect-video w-full object-cover" src="/assets/desktops/xfce.webp" alt="Xfce desktop">
-                    <span class="flex items-baseline justify-between gap-2 px-3 py-2">
-                        <span class="flex-none text-sm font-medium">Xfce</span>
-                        <a class="min-w-0 truncate text-xs text-ink-subtle underline" rel="noopener" href="https://xfce.org/">xfce.org</a>
-                    </span>
-                </span>
-            </label>
-            <label class="choice">
-                <input class="sr-only" type="radio" name="desktop" value="cinnamon"
-                       {{if eq (printf "%s" .Choice.Desktop) "cinnamon"}}checked{{end}}>
-                <span class="choice-card overflow-hidden p-0">
-                    <img class="aspect-video w-full object-cover" src="/assets/desktops/cinnamon.webp" alt="Cinnamon desktop">
-                    <span class="flex items-baseline justify-between gap-2 px-3 py-2">
-                        <span class="flex-none text-sm font-medium">Cinnamon</span>
-                        <a class="min-w-0 truncate text-xs text-ink-subtle underline" rel="noopener" href="https://projects.linuxmint.com/cinnamon/">linuxmint.com</a>
-                    </span>
-                </span>
-            </label>
-            <label class="choice">
-                <input class="sr-only" type="radio" name="desktop" value="mate"
-                       {{if eq (printf "%s" .Choice.Desktop) "mate"}}checked{{end}}>
-                <span class="choice-card overflow-hidden p-0">
-                    <img class="aspect-video w-full object-cover" src="/assets/desktops/mate.webp" alt="MATE desktop">
-                    <span class="flex items-baseline justify-between gap-2 px-3 py-2">
-                        <span class="flex-none text-sm font-medium">MATE</span>
-                        <a class="min-w-0 truncate text-xs text-ink-subtle underline" rel="noopener" href="https://mate-desktop.org/">mate-desktop.org</a>
-                    </span>
-                </span>
-            </label>
-            <label class="choice">
-                <input class="sr-only" type="radio" name="desktop" value="standard"
-                       {{if eq (printf "%s" .Choice.Desktop) "standard"}}checked{{end}}>
-                <span class="choice-card overflow-hidden p-0">
-                    <span class="terminal">user@debian:~$ &#9608;</span>
-                    <span class="block px-3 py-2 text-sm font-medium">No desktop</span>
-                </span>
-            </label>
-        </div>
-        <div class="desktop-overlay absolute inset-0 items-start justify-center pt-12">
-            <p class="mx-4 rounded-md border border-line bg-surface px-4 py-3 text-center text-sm text-ink-muted shadow-sm">
-                This image is not tied to a desktop; the installer asks during setup.<br>
-                <label class="cursor-pointer underline" for="flavour-live">Pick one now with "Try it first"</label>
-            </p>
-        </div>
-        </div>
-    </fieldset>
-
-    <noscript>
-        <button class="button mt-5" type="submit">
-            Update the answer
-        </button>
-    </noscript>
-</form>
-
-</div>
+        <ul class="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {{range .Images}}
+            <li class="tile">
+                {{template "screen" .}}
+                {{/*
+                  The name and its line are one block, separated by nothing but
+                  their own leading. The vertical padding is smaller than the
+                  horizontal because each line box carries half its leading above
+                  and below the glyphs: eight plus that reads as the twelve
+                  either side of it.
+                */}}
+                <div class="px-3 py-2">
+                    <div class="flex items-baseline justify-between gap-2">
+                        <span class="font-medium">{{.Name}}</span>
+                        <span class="flex-none text-sm text-ink-subtle">{{.Size}}</span>
+                    </div>
+                    <p class="text-sm text-ink-muted">{{.Detail}}</p>
+                </div>
+                {{/*
+                  The two actions sit on the caption's own gutter and at its own
+                  size: a tile is one of twelve, so a full-width button on each
+                  is twelve blocks of shouting.
+                */}}
+                <div class="flex items-center gap-3 border-t border-line px-3 py-2">
+                    <a class="button button-small no-underline"
+                       href="{{.DownloadURL}}" aria-label="Download {{.Filename}}">
+                        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 3v12m0 0 5-5m-5 5-5-5M4 21h16"/>
+                        </svg>
+                        Download</a>
+                    <a class="ml-auto text-sm text-ink-muted underline" href="/d/{{.ID}}"
+                       aria-label="Checksums for {{.Filename}}">Checksums</a>
+                </div>
+            </li>
+            {{end}}
+        </ul>
+    </div>
+    {{end}}
+</section>
+{{end}}
 
 {{if .Top}}
-<section class="mt-10">
-    <h2 class="text-lg font-semibold">Popular applications in <span class="font-mono">{{.Suite}}</span></h2>
+<section class="mt-12">
+    <h2 class="text-lg font-semibold">Popular applications in
+        <span class="suite suite-{{.Suite}} ml-1 font-mono"><span class="suite-mark"></span>{{.Suite}}</span></h2>
     <ul class="mt-3 divide-y divide-line rounded-md border border-line bg-surface">
         {{range .Top}}
         <li>
@@ -197,11 +110,10 @@
         {{end}}
     </ul>
     <p class="mt-2 text-xs text-ink-subtle">
-        What counts as an application here is our judgement, not Debian's: graphical programs with a
-        screenshot or the matching debtags, minus libraries, desktop plumbing, and anything a popular
-        metapackage installs on your behalf. Ordered by the number of systems reporting regular use to
-        <a class="underline" href="https://popcon.debian.org/">popcon</a>.
-        Screenshots from <a class="underline" href="https://screenshots.debian.net/">screenshots.debian.net</a>.
+        What counts as an application is our call, not Debian's: graphical programs, minus libraries,
+        desktop plumbing, and whatever a popular metapackage installs for you. Ordered by
+        <a class="underline" href="https://popcon.debian.org/">popcon</a>, illustrated by
+        <a class="underline" href="https://screenshots.debian.net/">screenshots.debian.net</a>.
     </p>
 </section>
 {{end}}

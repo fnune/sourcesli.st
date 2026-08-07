@@ -70,6 +70,12 @@ type FreshBinaryVersion struct {
 	ObservedAt   time.Time
 }
 
+type IsoSize struct {
+	Image      string
+	Bytes      int64
+	ObservedAt time.Time
+}
+
 type IsoVersion struct {
 	Channel    string
 	Version    string

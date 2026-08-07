@@ -16,6 +16,7 @@
   curl,
   jq,
   just,
+  watchexec,
 }:
 
 mkShell {
@@ -36,6 +37,7 @@ mkShell {
     curl
     jq
     just
+    watchexec
   ];
 
   env = {

@@ -17,7 +17,6 @@ type Querier interface {
 	CountOpenBugsForPackage(ctx context.Context, package_ string) (int64, error)
 	// Every architecture and version of one binary package in one suite.
 	GetBinaryPackage(ctx context.Context, arg GetBinaryPackageParams) ([]GetBinaryPackageRow, error)
-	GetBug(ctx context.Context, number int32) (Bug, error)
 	// The freshness overlay, read in preference to binary_packages. Absent rows are
 	// the normal case: the overlay only holds what changed since the last bulk load.
 	GetFreshVersion(ctx context.Context, arg GetFreshVersionParams) (GetFreshVersionRow, error)
@@ -27,14 +26,18 @@ type Querier interface {
 	// screenshots.debian.net.
 	GetScreenshot(ctx context.Context, package_ string) (GetScreenshotRow, error)
 	GetSourcePackage(ctx context.Context, arg GetSourcePackageParams) (SourcePackage, error)
-	ListBugTags(ctx context.Context, bugNumber int32) ([]string, error)
-	// Bugs against a binary package or its source, most severe first.
+	// Bugs against a binary package or its source, most severe first, with
+	// everything the list shows about one bug. There is no bug page to click
+	// through to, so the tags come along here rather than one query per row.
 	//
 	// Archived bugs are excluded because a package page is about the present. The
 	// partial indexes in db/migrations cover exactly this predicate. Status and
 	// severity are optional filters where the empty string means "any"; status is
 	// otherwise 'open' or 'closed'.
 	ListBugsForPackage(ctx context.Context, arg ListBugsForPackageParams) ([]ListBugsForPackageRow, error)
+	// The sizes ingest last observed on cdimage, keyed by the catalogue identifier
+	// the download page addresses each image by.
+	ListISOSizes(ctx context.Context) ([]ListISOSizesRow, error)
 	// The point releases ingest last observed on cdimage. The image chooser
 	// builds exact download filenames from them.
 	ListISOVersions(ctx context.Context) ([]ListISOVersionsRow, error)
@@ -42,6 +45,10 @@ type Querier interface {
 	// the package page. A binary row wins over a source row of the same name; the
 	// version is the search table's approximation, good enough for a tab label.
 	ListPackageSuites(ctx context.Context, name string) ([]ListPackageSuitesRow, error)
+	// The versions of a handful of named packages in one suite. The download page
+	// states what a live image's desktop ships as, and this is where that number
+	// comes from: our own copy of the archive rather than a constant in the code.
+	ListPackageVersions(ctx context.Context, arg ListPackageVersionsParams) ([]ListPackageVersionsRow, error)
 	ListSuites(ctx context.Context) ([]Suite, error)
 	// The most used applications in one suite, for the front page. The transform
 	// decides what counts as an application; votes is popcon's count of systems
@@ -51,6 +58,13 @@ type Querier interface {
 	// Queries the web tier runs. Every one is bounded and served by an index
 	// created in db/migrations.
 	// Full-text search across package names and synopses, most popular first.
+	//
+	// Full-text search matches whole words, so `fire` finds "Fire an event" and not
+	// firefox-esr: to Postgres those are different lexemes. A reader typing the
+	// start of a name means the name, and the autocompletion beside this query
+	// already behaves that way, so a prefix of a name matches here too and sorts
+	// above the prose. Both halves are served by their own index.
+	//
 	// A name can appear as both a binary and a source package. Collapsing to one
 	// row keeps a reader from seeing the same name twice with no way to tell why;
 	// the binary wins because that is the page a search result links to.

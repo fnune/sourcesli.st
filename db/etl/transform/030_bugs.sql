@@ -34,7 +34,11 @@ SELECT
     coalesce(b.title, ''),
     coalesce(b.severity, ''),
     coalesce(b.status, ''),
-    coalesce(b.submitter_name, ''),
+    -- The submitter's name reaches UDD as the display name of a mail address,
+    -- so a name holding a comma or a full stop arrives wrapped in the quotes
+    -- that made it one token: "ISHIKAWA,chiaki". The quotes belong to the
+    -- address, not to the person.
+    btrim(coalesce(b.submitter_name, ''), '"'),
     coalesce(b.owner, ''),
     coalesce(b.forwarded, ''),
     -- UDD stores these as `timestamp without time zone` holding UTC. Assigning

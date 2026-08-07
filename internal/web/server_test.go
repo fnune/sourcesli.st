@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"io/fs"
@@ -52,7 +53,26 @@ func get(t *testing.T, handler http.Handler, target string, headers map[string]s
 	}
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
+
+	// Otherwise a test asking whether a word is on the page searches the inlined
+	// stylesheet too, and finds it among the colour names and class selectors.
+	recorder.Body = bytes.NewBuffer(withoutStylesheet(recorder.Body.Bytes()))
 	return recorder
+}
+
+func withoutStylesheet(document []byte) []byte {
+	opening, closing := []byte("<style>"), []byte("</style>")
+
+	start := bytes.Index(document, opening)
+	if start < 0 {
+		return document
+	}
+	end := bytes.Index(document[start:], closing)
+	if end < 0 {
+		return document
+	}
+
+	return append(document[:start+len(opening):start+len(opening)], document[start+end:]...)
 }
 
 func populatedQueries() *fakeQueries {
@@ -82,23 +102,25 @@ func populatedQueries() *fakeQueries {
 		sources: map[string]query.SourcePackage{
 			"bash": {Name: "bash", Version: "5.3-3", Suite: "unstable", MaintainerName: "Matthias Klose"},
 		},
-		bugs: map[int32]query.Bug{
-			1136390: {
-				Number: 1136390, Package: "bash", Title: "terminal resize duplicates the command line",
-				Severity: "minor", Status: "pending",
-				Arrival: time.Date(2026, time.May, 13, 10, 9, 3, 0, time.UTC),
-			},
-		},
 		bugList: []query.ListBugsForPackageRow{
-			{Number: 1136390, Title: "terminal resize duplicates the command line", Severity: "minor"},
+			{
+				Number: 1136390, Package: "bash", Source: "bash",
+				Title: "terminal resize duplicates the command line", Severity: "minor",
+				Status: "pending", SubmitterName: "Witold Baryluk", Tags: []string{"upstream"},
+				Arrival:      time.Date(2026, time.May, 13, 10, 9, 3, 0, time.UTC),
+				LastModified: time.Date(2026, time.June, 2, 8, 0, 0, 0, time.UTC),
+			},
 			{Number: 999999, Title: "data loss on upgrade", Severity: "grave"},
 		},
-		bugTags:  []string{"upstream"},
 		openBugs: 2,
 		lastSync: &syncedAt,
 		top: []query.ListTopPackagesRow{
 			{Name: "firefox-esr", Suite: "unstable", Synopsis: "Mozilla Firefox web browser", Votes: 51115},
 			{Name: "nautilus", Suite: "unstable", Synopsis: "file manager for GNOME", Votes: 48302},
+		},
+		packageVersions: []query.ListPackageVersionsRow{
+			{Name: "gnome-shell", Version: "48.3-2"},
+			{Name: "plasma-desktop", Version: "4:6.3.4-1"},
 		},
 		suiteVersions: []query.ListPackageSuitesRow{
 			{Suite: "stable", Version: "5.2-1"},
@@ -143,7 +165,7 @@ func TestIndexListsPopularApplications(t *testing.T) {
 		`src="/screenshots/firefox-esr"`,
 		// The list is a heuristic of ours over a denylist of ours. Crediting
 		// popcon alone would present our editing as Debian's measurement.
-		"our judgement, not Debian's",
+		"our call, not Debian's",
 		"popcon.debian.org",
 	} {
 		if !strings.Contains(body, want) {
@@ -225,6 +247,48 @@ func TestDefaultSuiteIsStable(t *testing.T) {
 
 	if queries.searchCalledWith.Suite != "stable" {
 		t.Errorf("default search suite = %q, want stable", queries.searchCalledWith.Suite)
+	}
+}
+
+// The front page carries no parameter to hold the suite, so without a cookie a
+// reload puts a reader of unstable back into stable. Only a suite we serve is
+// remembered, wherever the value came from.
+func TestTheChosenSuiteSurvivesAReload(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestServer(t, populatedQueries())
+
+	response := get(t, handler, "/search?q=bash&suite=unstable", nil)
+	var remembered *http.Cookie
+	for _, cookie := range response.Result().Cookies() {
+		if cookie.Name == "suite" {
+			remembered = cookie
+		}
+	}
+	if remembered == nil || remembered.Value != "unstable" {
+		t.Fatalf("the chosen suite was not remembered: %+v", remembered)
+	}
+	if !remembered.HttpOnly || remembered.SameSite != http.SameSiteLaxMode {
+		t.Error("the cookie should be unreadable to scripts and not travel cross-site")
+	}
+
+	queries := populatedQueries()
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
+	request.AddCookie(remembered)
+	recorder := httptest.NewRecorder()
+	newTestServer(t, queries).ServeHTTP(recorder, request)
+
+	if queries.topCalledWith.Suite != "unstable" {
+		t.Errorf("the front page read %q, want the remembered suite", queries.topCalledWith.Suite)
+	}
+
+	queries = populatedQueries()
+	request = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
+	request.AddCookie(&http.Cookie{Name: "suite", Value: "nosuchsuite"})
+	newTestServer(t, queries).ServeHTTP(httptest.NewRecorder(), request)
+
+	if queries.topCalledWith.Suite != "stable" {
+		t.Errorf("an unknown suite was trusted: %q", queries.topCalledWith.Suite)
 	}
 }
 
@@ -400,7 +464,7 @@ func TestPackagePageRendersEverything(t *testing.T) {
 		"amd64",
 		"5.3-3",
 		"Matthias Klose",
-		`href="/b/1136390"`,
+		`href="https://bugs.debian.org/1136390"`,
 		"tracker.debian.org/pkg/bash",
 	} {
 		if !strings.Contains(body, want) {
@@ -409,15 +473,97 @@ func TestPackagePageRendersEverything(t *testing.T) {
 	}
 }
 
-// Release-critical bugs are styled differently, and that styling is the only
-// signal on the page that a bug is serious.
-func TestPackagePageMarksReleaseCriticalBugs(t *testing.T) {
+// The list is the whole of what this site says about a bug, so what the bug
+// page used to show has to be on the row: there is nowhere else left to put it.
+func TestBugRowsCarryTheWholeSnapshot(t *testing.T) {
 	t.Parallel()
 
-	response := get(t, newTestServer(t, populatedQueries()), "/p/unstable/bash", nil)
+	body := get(t, newTestServer(t, populatedQueries()), "/p/unstable/bash", nil).Body.String()
 
-	if !strings.Contains(response.Body.String(), "bg-danger") {
-		t.Error("a grave bug should be marked as release critical")
+	for _, want := range []string{
+		"terminal resize duplicates the command line",
+		"pending",
+		"Witold Baryluk",
+		"13 May 2026",
+		"2 Jun 2026",
+		"upstream",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the bug row does not carry %q", want)
+		}
+	}
+}
+
+// A NULL timestamp arrives as the zero time rather than a nil pointer, and a
+// struct is always truthy in a template. Unguarded, a bug with no dates renders
+// "1 January 0001".
+func TestBugRowsOmitMissingDates(t *testing.T) {
+	t.Parallel()
+
+	queries := populatedQueries()
+	queries.bugList = []query.ListBugsForPackageRow{
+		{Number: 1136390, Title: "no dates recorded", Severity: "normal"},
+	}
+
+	body := get(t, newTestServer(t, queries), "/p/unstable/bash", nil).Body.String()
+
+	if strings.Contains(body, "0001") {
+		t.Error("a missing date should be omitted, not rendered as year 1")
+	}
+	for _, unwanted := range []string{"reported", "updated"} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("a bug with no dates should not be labelled %q", unwanted)
+		}
+	}
+}
+
+// A bug filed against another binary of the same source, or against the source
+// alone, says so. Repeating the name of the package whose page this is would be
+// noise on every other row.
+func TestBugRowsNameOnlyTheUnexpectedPackage(t *testing.T) {
+	t.Parallel()
+
+	queries := populatedQueries()
+	queries.bugList = []query.ListBugsForPackageRow{
+		{Number: 1, Title: "against this package", Severity: "normal", Package: "bash", Source: "bash"},
+		{Number: 2, Title: "against a sibling", Severity: "normal", Package: "bash-doc", Source: "bash"},
+	}
+
+	body := get(t, newTestServer(t, queries), "/p/unstable/bash", nil).Body.String()
+
+	if !strings.Contains(body, "bash-doc") {
+		t.Error("a bug against another binary of the source should name it")
+	}
+	if strings.Contains(body, "against <span class=\"font-mono\">bash</span>") {
+		t.Error("a bug against this very package should not repeat its name")
+	}
+}
+
+// Severity is what the list is ordered by, and colour is how a reader takes
+// that order in. Each severity gets its own mark; one the BTS does not define
+// gets the bare one rather than borrowing another severity's colour.
+func TestBugRowsMarkEachSeverityInItsOwnColour(t *testing.T) {
+	t.Parallel()
+
+	queries := populatedQueries()
+	queries.bugList = []query.ListBugsForPackageRow{
+		{Number: 1, Title: "a", Severity: "grave"},
+		{Number: 2, Title: "b", Severity: "wishlist"},
+		{Number: 3, Title: "c", Severity: "spicy"},
+	}
+
+	body := get(t, newTestServer(t, queries), "/p/unstable/bash", nil).Body.String()
+
+	for _, want := range []string{`"severity severity-grave"`, `"severity severity-wishlist"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the list does not mark %s", want)
+		}
+	}
+	if strings.Contains(body, "severity-spicy") {
+		t.Error("a severity the BTS does not define should not be given a colour of its own")
+	}
+	if !strings.Contains(body, `"severity"`) {
+		t.Error("an unrecognised severity should still get the bare mark")
 	}
 }
 
@@ -498,8 +644,12 @@ func TestPackagePageLinksTheOtherSuites(t *testing.T) {
 	if !strings.Contains(body, "5.2-1") {
 		t.Error("the tab should carry the version in that suite")
 	}
-	if strings.Contains(body, `href="/p/experimental/bash"`) {
-		t.Error("a suite without the package should not be a link")
+	// The picker in the masthead lists every suite; the tabs are the package's
+	// own switcher and only offer the suites that carry it.
+	tabs := body[strings.Index(body, `aria-label="Suites"`):]
+	tabs = tabs[:strings.Index(tabs, "</nav>")]
+	if strings.Contains(tabs, `href="/p/experimental/bash"`) {
+		t.Error("a suite without the package should not be a tab link")
 	}
 }
 
@@ -580,49 +730,22 @@ func TestMalformedPackageNameIsRejected(t *testing.T) {
 	}
 }
 
-func TestBugPageRenders(t *testing.T) {
+// The bug page this site used to serve is gone, but the links to it are not.
+func TestTheOldBugPathRedirectsToTheBugTracker(t *testing.T) {
 	t.Parallel()
 
 	response := get(t, newTestServer(t, populatedQueries()), "/b/1136390", nil)
 
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", response.Code)
+	if response.Code != http.StatusMovedPermanently {
+		t.Fatalf("status = %d, want 301", response.Code)
 	}
-	body := response.Body.String()
-	for _, want := range []string{
-		"terminal resize duplicates the command line",
-		"13 May 2026",
-		"upstream",
-		"bugs.debian.org/1136390",
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("bug page does not contain %q", want)
-		}
+	if got := response.Header().Get("Location"); got != "https://bugs.debian.org/1136390" {
+		t.Errorf("redirected to %q, want the bug in the tracking system", got)
 	}
 }
 
-// The reader's suite has to survive the trip through a bug page rather than
-// being reset to unstable by a hard-coded link.
-func TestBugPageKeepsTheReadersSuite(t *testing.T) {
-	t.Parallel()
-
-	response := get(t, newTestServer(t, populatedQueries()), "/b/1136390?suite=stable", nil)
-
-	if !strings.Contains(response.Body.String(), `href="/p/stable/bash"`) {
-		t.Error("the package link should carry the suite the reader came with")
-	}
-}
-
-func TestUnknownBugIsNotFound(t *testing.T) {
-	t.Parallel()
-
-	response := get(t, newTestServer(t, populatedQueries()), "/b/424242", nil)
-
-	if response.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", response.Code)
-	}
-}
-
+// The redirect sends the reader off this site, so what goes into its location
+// has to be a bug number and nothing else.
 func TestMalformedBugNumberIsRejected(t *testing.T) {
 	t.Parallel()
 
@@ -631,22 +754,6 @@ func TestMalformedBugNumberIsRejected(t *testing.T) {
 		if response.Code != http.StatusNotFound {
 			t.Errorf("%s status = %d, want 404", target, response.Code)
 		}
-	}
-}
-
-// A NULL timestamp arrives as the zero time rather than a nil pointer, and a
-// struct is always truthy in a template. Without the isZeroTime guard this page
-// renders "1 January 0001".
-func TestBugPageOmitsMissingDates(t *testing.T) {
-	t.Parallel()
-
-	queries := populatedQueries()
-	queries.bugs[1136390] = query.Bug{Number: 1136390, Title: "no dates recorded", Severity: "normal"}
-
-	response := get(t, newTestServer(t, queries), "/b/1136390", nil)
-
-	if strings.Contains(response.Body.String(), "0001") {
-		t.Error("a missing date should be omitted, not rendered as year 1")
 	}
 }
 
@@ -665,60 +772,71 @@ func TestTheOldImagesPathRedirectsToTheFrontPage(t *testing.T) {
 	}
 }
 
-func TestImageChooserRendersWithoutADatabase(t *testing.T) {
+// The catalogue is the page: no questions, no state, and every image Debian
+// publishes for these machines listed with what it looks like and what it costs.
+func TestFrontPageListsEveryImage(t *testing.T) {
 	t.Parallel()
 
-	response := get(t, newTestServer(t, populatedQueries()), "/", nil)
+	body := get(t, newTestServer(t, populatedQueries()), "/", nil).Body.String()
 
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", response.Code)
-	}
-	body := response.Body.String()
-	for _, want := range []string{"Live image with GNOME", "iso-hybrid/", "SHA512SUMS"} {
+	for _, want := range []string{
+		"Live images", "GNOME 48.3", "KDE Plasma 6.3.4", "No desktop", "Network installer", "Full DVD",
+		"64-bit PC", "64-bit ARM", "32-bit PC",
+		"iso-hybrid/", "iso-cd/", "iso-dvd/",
+		"/d/amd64-live-gnome", "/d/arm64-netinst", "/d/i386-dvd",
+	} {
 		if !strings.Contains(body, want) {
-			t.Errorf("chooser does not contain %q", want)
+			t.Errorf("the front page does not contain %q", want)
 		}
 	}
+	if strings.Contains(body, "<form id=\"images-form\"") {
+		t.Error("the catalogue replaced the questionnaire; there is nothing to submit")
+	}
+	// What the live images share is stated once for the section, not on each of
+	// the six tiles that differ only in which desktop they carry.
+	if strings.Count(body, "Boot from USB without touching your disk") != 1 {
+		t.Error("the shared description should appear once, on the section")
+	}
 }
 
-func TestImageChooserReflectsTheAnswers(t *testing.T) {
+// Debian builds live images for 64-bit PCs only. The page says so where it is
+// true rather than offering a choice it then has to overrule.
+func TestFrontPageSaysWhereLiveImagesAreMissing(t *testing.T) {
 	t.Parallel()
 
-	response := get(t, newTestServer(t, populatedQueries()),
-		"/?arch=amd64&flavour=live&desktop=xfce", nil)
+	body := get(t, newTestServer(t, populatedQueries()), "/", nil).Body.String()
 
-	body := response.Body.String()
-	if !strings.Contains(body, "current-live") {
-		t.Error("a live choice should link the live directory")
+	if !strings.Contains(body, "Live images are 64-bit PC only") {
+		t.Error("the ARM group should say why it lists no live images")
 	}
-	if !strings.Contains(body, "amd64-xfce.iso") {
-		t.Error("the filename pattern should name the chosen desktop")
-	}
-	// The form has to come back showing what was asked for, or the answer and
-	// the controls disagree on the next change.
-	if !regexp.MustCompile(`value="xfce"\s+checked`).MatchString(body) {
-		t.Error("the form should keep the chosen desktop checked")
+	if !strings.Contains(body, "Debian 12, supported until June 2028") {
+		t.Error("the 32-bit group should say which release it is on")
 	}
 }
 
-// The first visit carries no answers, so the User-Agent supplies the
-// architecture and the page leads with a finished recommendation instead of a
-// questionnaire.
-func TestImageChooserDetectsTheArchitecture(t *testing.T) {
+// The User-Agent is a guess, so it orders the page and labels one group. It
+// hides nothing: every architecture is listed for a reader whose browser lies.
+func TestFrontPageLeadsWithTheDetectedHardware(t *testing.T) {
 	t.Parallel()
 
-	response := get(t, newTestServer(t, populatedQueries()), "/",
-		map[string]string{"User-Agent": "Mozilla/5.0 (X11; Linux aarch64; rv:141.0) Gecko/20100101"})
+	body := get(t, newTestServer(t, populatedQueries()), "/",
+		map[string]string{"User-Agent": "Mozilla/5.0 (X11; Linux aarch64; rv:141.0) Gecko/20100101"}).Body.String()
 
-	body := response.Body.String()
-	if !strings.Contains(body, "Network installer for arm64") {
-		t.Error("an ARM browser should get an ARM recommendation without being asked")
+	if !strings.Contains(body, "looks like this computer") {
+		t.Error("the detected hardware should be marked")
+	}
+	arm, pc := strings.Index(body, "64-bit ARM"), strings.Index(body, "64-bit PC")
+	if arm > pc {
+		t.Error("the detected hardware should be listed first")
+	}
+	if !strings.Contains(body, "amd64-live-gnome") {
+		t.Error("a guess must not remove images from the page")
 	}
 }
 
-// The exact filename comes from the versions ingest observed, so the download
-// link points at a file that exists today rather than at a pattern.
-func TestImageChooserUsesTheIngestedVersions(t *testing.T) {
+// The exact filename comes from the versions ingest observed, so every link
+// points at a file that exists today rather than at a pattern.
+func TestImagesUseTheIngestedVersions(t *testing.T) {
 	t.Parallel()
 
 	queries := populatedQueries()
@@ -731,53 +849,40 @@ func TestImageChooserUsesTheIngestedVersions(t *testing.T) {
 	}
 }
 
-// Only stable and oldstable have released images, and the reader is told which
-// one they are being offered by the label above the answer, which is the one
-// place the page says it.
-func TestImageChooserNamesTheRelease(t *testing.T) {
+// One image has a page of its own: the file it lands as, and how to check that
+// what landed is what Debian published.
+func TestImagePageCarriesTheChecksums(t *testing.T) {
 	t.Parallel()
 
-	body := get(t, newTestServer(t, populatedQueries()), "/", nil).Body.String()
+	response := get(t, newTestServer(t, populatedQueries()), "/d/amd64-live-xfce", nil)
 
-	if !strings.Contains(body, "Debian 13 (trixie), stable") {
-		t.Error("the answer should name the release it recommends")
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
 	}
-	if strings.Count(body, ", stable") != 1 {
-		t.Error("the release should be named once, not repeated in prose")
+	body := response.Body.String()
+	for _, want := range []string{
+		"debian-live-13.6.0-amd64-xfce.iso",
+		"SHA512SUMS.sign",
+		"gpg --verify",
+		"Debian 13 (trixie), stable",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the image page does not contain %q", want)
+		}
 	}
 }
 
-// Non-live images carry no desktop, so the desktop cards grey out under an
-// overlay whose call to action is a plain label for the live radio: clicking
-// it switches the flavour with no JavaScript beyond htmx's refresh.
-func TestDesktopOverlayOffersTheLiveSwitch(t *testing.T) {
+// An image identifier is a path segment, so anything that is not one of the
+// twelve is a page that does not exist rather than a request we try to satisfy.
+func TestUnknownImageIsNotFound(t *testing.T) {
 	t.Parallel()
 
-	body := get(t, newTestServer(t, populatedQueries()), "/?flavour=netinst", nil).Body.String()
+	handler := newTestServer(t, populatedQueries())
 
-	if !strings.Contains(body, `for="flavour-live"`) {
-		t.Error("the overlay should offer switching to the live image via a label")
-	}
-	if !strings.Contains(body, `id="flavour-live"`) {
-		t.Error("the live radio needs the id the overlay label points at")
-	}
-}
-
-// The reader changes a radio and the answer updates; there is no submit
-// button outside noscript. The form must still work as a plain GET form.
-func TestImageChooserFormWorksWithoutJavaScript(t *testing.T) {
-	t.Parallel()
-
-	body := get(t, newTestServer(t, populatedQueries()), "/", nil).Body.String()
-
-	if !strings.Contains(body, `action="/" method="get"`) {
-		t.Error("the chooser must be a real form")
-	}
-	if !strings.Contains(body, "<noscript>") {
-		t.Error("the no-JavaScript path needs its submit button")
-	}
-	if strings.Contains(body, "Show me the image") {
-		t.Error("the always-visible submit button should be gone")
+	for _, target := range []string{"/d/arm64-live-gnome", "/d/nonsense", "/d/..%2Fetc%2Fpasswd"} {
+		if code := get(t, handler, target, nil).Code; code != http.StatusNotFound {
+			t.Errorf("%s status = %d, want 404", target, code)
+		}
 	}
 }
 
@@ -787,7 +892,7 @@ func TestDatabaseFailureBecomesAServerError(t *testing.T) {
 	queries := populatedQueries()
 	queries.failWith = errors.New("connection refused")
 
-	for _, target := range []string{"/", "/search?q=bash", "/p/unstable/bash", "/b/1136390"} {
+	for _, target := range []string{"/", "/search?q=bash", "/p/unstable/bash"} {
 		response := get(t, newTestServer(t, queries), target, nil)
 		if response.Code != http.StatusInternalServerError {
 			t.Errorf("%s status = %d, want 500", target, response.Code)

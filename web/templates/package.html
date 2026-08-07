@@ -9,17 +9,20 @@
 <nav class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5" aria-label="Suites">
     {{range .Suites}}
     {{$version := index $.SuiteVersions .Name}}
+    {{/* Five suites side by side is where the colours earn their keep: the one
+         being read carries it in its border, the rest in a dot. */}}
     {{if eq .Name $.Suite}}
-    <span class="rounded-md border border-accent bg-muted px-3 py-2" aria-current="page">
-        <span class="block font-mono text-sm font-medium">{{.Name}}</span>
+    <span class="suite suite-{{.Name}} rounded-md border border-accent bg-muted px-3 py-2"
+          aria-current="page">
+        <span class="block font-mono text-sm font-medium"><span class="suite-mark"></span>{{.Name}}</span>
         <span class="block truncate text-xs text-ink-muted" title="{{$version}}">
             {{if $version}}{{$version}}{{else}}&mdash;{{end}}
         </span>
     </span>
     {{else if $version}}
-    <a class="rounded-md border border-line-strong bg-surface px-3 py-2 no-underline hover:border-line-strong"
+    <a class="suite suite-{{.Name}} rounded-md border border-line-strong bg-surface px-3 py-2 no-underline hover:border-accent"
        href="/p/{{.Name}}/{{$.Name}}">
-        <span class="block font-mono text-sm font-medium">{{.Name}}</span>
+        <span class="block font-mono text-sm font-medium"><span class="suite-mark"></span>{{.Name}}</span>
         <span class="block truncate text-xs text-ink-subtle" title="{{$version}}">{{$version}}</span>
     </a>
     {{else}}
@@ -43,7 +46,14 @@
     <h2 class="text-lg font-semibold">Binary packages in <span class="font-mono">{{.Suite}}</span></h2>
     {{if .Binaries}}
     <div class="mt-3 overflow-x-auto">
-        <table class="w-full border-collapse text-sm">
+        {{/*
+          Fixed layout: with the default, every column is measured from its
+          contents, so the same table jumps about as the version strings differ
+          between suites. Four equal columns are wider than three of them need
+          and stay put, which is worth more in a table a reader compares across
+          suites.
+        */}}
+        <table class="w-full table-fixed border-collapse text-sm">
             <thead>
                 <tr class="border-b border-line-strong text-left">
                     <th class="py-2 pr-4 font-medium">Architecture</th>
@@ -56,7 +66,7 @@
                 {{range .Binaries}}
                 <tr class="border-b border-line">
                     <td class="py-2 pr-4 font-mono">{{.Architecture}}</td>
-                    <td class="py-2 pr-4 font-mono">{{.Version}}</td>
+                    <td class="py-2 pr-4 font-mono break-words">{{.Version}}</td>
                     <td class="py-2 pr-4">{{.Section}}</td>
                     <td class="py-2 pr-4">{{if .InstalledSize}}{{.InstalledSize}} kB{{else}}&mdash;{{end}}</td>
                 </tr>
@@ -143,14 +153,74 @@
     </form>
 
     {{if .Bugs}}
-    <ul class="mt-3 divide-y divide-line rounded-md border border-line bg-surface">
+    <p class="mt-3 text-sm text-ink-subtle">Each bug opens in the
+        <a class="underline" href="https://bugs.debian.org/{{.Name}}">Debian bug tracking system</a>,
+        which holds its message log and current state.</p>
+    <ul class="mt-2 divide-y divide-line rounded-md border border-line bg-surface text-sm">
         {{range .Bugs}}
-        <li class="px-4 py-3">
-            <a class="font-mono underline" href="/b/{{.Number}}">#{{.Number}}</a>
-            <span class="ml-2 rounded px-1.5 py-0.5 text-xs
-                {{if .ReleaseCritical}}bg-danger text-danger-ink{{else}}bg-muted text-ink-muted{{end}}">
-                {{.Severity}}</span>
-            <p class="mt-1">{{.Title}}</p>
+        {{/*
+          Three columns, the first two of a width the content cannot change, so
+          that the numbers, the severities and the titles each read down the
+          list as a column. Sizing them to their content would step the titles
+          in and out by a digit.
+        */}}
+        <li class="flex items-baseline gap-x-3 px-3 py-2 hover:bg-muted">
+            <span class="w-20 flex-none font-mono text-ink-subtle">#{{.Number}}</span>
+            {{/*
+              The mark sits in the column but is not the column: a background
+              stretched to the width of the longest severity would read as a bar
+              chart of nothing. A severity the BTS does not define gets the bare
+              mark, which is the one case the palette has no colour for.
+            */}}
+            <span class="w-20 flex-none text-xs">
+                <span class="severity{{with .SeverityKey}} severity-{{.}}{{end}}">{{.Severity}}</span>
+            </span>
+            <div class="min-w-0 flex-1">
+                {{/*
+                  The mark for a link that leaves the site belongs against the
+                  end of the title it belongs to, not out at the edge of the row
+                  with the width of the title between them.
+                */}}
+                <a class="flex max-w-full items-center gap-1 no-underline hover:underline"
+                   href="https://bugs.debian.org/{{.Number}}" rel="nofollow noopener">
+                    <span class="min-w-0 truncate" title="{{.Title}}">{{.Title}}</span>
+                    <svg class="h-3 w-3 flex-none text-ink-subtle" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                         stroke-linejoin="round" aria-hidden="true">
+                        <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>
+                    </svg>
+                    <span class="sr-only">on bugs.debian.org</span>
+                </a>
+                {{/*
+                  Everything else the snapshot holds, under the title: this list
+                  is the whole of what the site says about a bug, and the
+                  tracking system is the only place to click through to.
+                */}}
+                {{if .HasDetail}}
+                <p class="bug-facts mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-subtle">
+                    {{if .Status}}
+                    <span {{if .Done}}class="text-success-ink"{{end}}>{{.Status}}</span>
+                    {{else if .Done}}<span class="text-success-ink">closed</span>{{end}}
+                    {{if .Package}}<span>against <span class="font-mono">{{.Package}}</span></span>{{end}}
+                    {{if .Source}}<span>source <span class="font-mono">{{.Source}}</span></span>{{end}}
+                    {{if .SubmitterName}}<span>by {{.SubmitterName}}</span>{{end}}
+                    {{if .Reported.Text}}
+                    <span>reported <time datetime="{{.Reported.Machine}}">{{.Reported.Text}}</time></span>
+                    {{end}}
+                    {{if .LastModified.Text}}
+                    <span>updated <time datetime="{{.LastModified.Machine}}">{{.LastModified.Text}}</time></span>
+                    {{end}}
+                    {{if .Forwarded}}
+                    <span title="{{.Forwarded}}">forwarded to {{.ForwardedTo}}</span>
+                    {{end}}
+                    {{if .Tags}}
+                    <span class="flex flex-wrap gap-1">
+                        {{range .Tags}}<span class="rounded bg-muted px-1 font-mono">{{.}}</span>{{end}}
+                    </span>
+                    {{end}}
+                </p>
+                {{end}}
+            </div>
         </li>
         {{end}}
     </ul>

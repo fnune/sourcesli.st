@@ -23,81 +23,6 @@ func (q *Queries) CountOpenBugsForPackage(ctx context.Context, package_ string) 
 	return total, err
 }
 
-const getBug = `-- name: GetBug :one
-SELECT
-    number,
-    package,
-    source,
-    title,
-    severity,
-    status,
-    submitter_name,
-    owner,
-    forwarded,
-    arrival,
-    last_modified,
-    done,
-    archived,
-    affects_stable,
-    affects_testing,
-    affects_unstable,
-    affects_experimental
-FROM bugs
-WHERE number = $1
-`
-
-func (q *Queries) GetBug(ctx context.Context, number int32) (Bug, error) {
-	row := q.db.QueryRow(ctx, getBug, number)
-	var i Bug
-	err := row.Scan(
-		&i.Number,
-		&i.Package,
-		&i.Source,
-		&i.Title,
-		&i.Severity,
-		&i.Status,
-		&i.SubmitterName,
-		&i.Owner,
-		&i.Forwarded,
-		&i.Arrival,
-		&i.LastModified,
-		&i.Done,
-		&i.Archived,
-		&i.AffectsStable,
-		&i.AffectsTesting,
-		&i.AffectsUnstable,
-		&i.AffectsExperimental,
-	)
-	return i, err
-}
-
-const listBugTags = `-- name: ListBugTags :many
-SELECT tag
-FROM bug_tags
-WHERE bug_number = $1
-ORDER BY tag ASC
-`
-
-func (q *Queries) ListBugTags(ctx context.Context, bugNumber int32) ([]string, error) {
-	rows, err := q.db.Query(ctx, listBugTags, bugNumber)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var tag string
-		if err := rows.Scan(&tag); err != nil {
-			return nil, err
-		}
-		items = append(items, tag)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listBugsForPackage = `-- name: ListBugsForPackage :many
 SELECT
     number,
@@ -107,12 +32,21 @@ SELECT
     severity,
     status,
     submitter_name,
+    forwarded,
     arrival,
     last_modified,
     done,
     affects_stable,
     affects_testing,
-    affects_unstable
+    affects_unstable,
+    coalesce(
+        (
+            SELECT array_agg(bug_tags.tag ORDER BY bug_tags.tag)
+            FROM bug_tags
+            WHERE bug_tags.bug_number = bugs.number
+        ),
+        '{}'
+    )::text [] AS tags
 FROM bugs
 WHERE
     NOT archived
@@ -149,15 +83,19 @@ type ListBugsForPackageRow struct {
 	Severity        string
 	Status          string
 	SubmitterName   string
+	Forwarded       string
 	Arrival         time.Time
 	LastModified    time.Time
 	Done            bool
 	AffectsStable   bool
 	AffectsTesting  bool
 	AffectsUnstable bool
+	Tags            []string
 }
 
-// Bugs against a binary package or its source, most severe first.
+// Bugs against a binary package or its source, most severe first, with
+// everything the list shows about one bug. There is no bug page to click
+// through to, so the tags come along here rather than one query per row.
 //
 // Archived bugs are excluded because a package page is about the present. The
 // partial indexes in db/migrations cover exactly this predicate. Status and
@@ -185,12 +123,14 @@ func (q *Queries) ListBugsForPackage(ctx context.Context, arg ListBugsForPackage
 			&i.Severity,
 			&i.Status,
 			&i.SubmitterName,
+			&i.Forwarded,
 			&i.Arrival,
 			&i.LastModified,
 			&i.Done,
 			&i.AffectsStable,
 			&i.AffectsTesting,
 			&i.AffectsUnstable,
+			&i.Tags,
 		); err != nil {
 			return nil, err
 		}

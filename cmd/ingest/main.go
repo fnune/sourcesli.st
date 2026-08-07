@@ -121,6 +121,13 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		logger.WarnContext(ctx, "refreshing the ISO versions failed", slog.Any("error", err))
 	}
 
+	// A missing size costs one tile a rounded figure, never a failed sync.
+	if err := etl.SyncISOSizes(
+		ctx, pool, etl.ISOVersionsHTTPClient(), config.userAgent, etl.SystemClock, logger,
+	); err != nil {
+		logger.WarnContext(ctx, "refreshing the ISO sizes failed", slog.Any("error", err))
+	}
+
 	// A missing thumbnail costs a grey box on the front page, never a failed
 	// sync.
 	if err := etl.SyncScreenshots(

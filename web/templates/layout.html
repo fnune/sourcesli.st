@@ -3,28 +3,38 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+{{/* Duplicated from the stylesheet: which scheme to paint in is the one thing
+     the browser needs before it has read any CSS. */}}
+<meta name="color-scheme" content="light dark">
 <title>{{template "title" .}} &middot; sourcesli.st</title>
-<link rel="stylesheet" href="/assets/app.css">
+<style>{{stylesheet}}</style>
 <script src="/assets/vendor/htmx.min.js" defer></script>
 </head>
-<body class="flex min-h-full flex-col bg-canvas text-ink font-sans">
+{{/*
+  Every link and form on the page is fetched by htmx and swapped in, instead of
+  the browser tearing the document down and building it again. The requests and
+  the URLs are identical either way, so with JavaScript off, or before htmx
+  loads, the same links and forms work as they always did.
+
+  htmx boosts only same-origin links, so the download buttons still hand off to
+  the browser rather than pulling four gigabytes into a swap.
+*/}}
+<body class="flex min-h-full flex-col bg-canvas text-ink font-sans" hx-boost="true">
 
 <header class="border-b border-line bg-surface">
-    <div class="mx-auto flex max-w-4xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-        <a href="/" class="font-mono text-lg font-semibold">sourcesli.st</a>
-        <nav class="flex flex-1 items-center gap-4 text-sm">
-            {{/*
-              The one call to action on the site, set apart by its icon and
-              position: downloading Debian is what a first-time visitor came
-              for, and it is what the front page leads with.
-            */}}
-            <a class="ml-auto inline-flex items-center gap-1.5 underline" href="/">
-                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M12 3v12m0 0 5-5m-5 5-5-5M4 21h16"/>
-                </svg>
-                Download Debian</a>
-        </nav>
+    {{/* One measure through the row: the gap between the controls is the space
+         above and below them. */}}
+    <div class="mx-auto flex max-w-4xl flex-wrap items-center gap-3 px-4 py-3">
+        {{/* The name is in the tab and the address bar; here it only needs to
+             be the way back. */}}
+        <a href="/" class="wordmark flex-none" aria-label="Home">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 10.5 12 3l9 7.5"/>
+                <path d="M5.5 9.5V20a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V9.5"/>
+            </svg>
+        </a>
+        {{template "searchform" .}}
     </div>
 </header>
 
@@ -37,12 +47,13 @@
         {{if .DataAsOf}}
             <p>Data from the Ultimate Debian Database, as of
                 <time datetime="{{.DataAsOf.Format "2006-01-02T15:04:05Z07:00"}}">
-                    {{.DataAsOf.Format "2 January 2006, 15:04 MST"}}</time>.
-                Up to two days behind the archive.</p>
+                    {{.DataAsOf.Format "2 January 2006, 15:04 MST"}}</time>.</p>
         {{else}}
             <p>No data has been loaded yet.</p>
         {{end}}
         <p class="mt-1">Derived from public Debian data under its original licences.
+            The <a class="underline" href="https://www.debian.org/logos/">Debian logo</a> is
+            &copy; Software in the Public Interest, Inc., used under CC BY-SA 3.0.
             Not affiliated with the Debian Project.
             <a class="underline" href="https://github.com/fnune/sourcesli.st">Source</a>.</p>
     </div>

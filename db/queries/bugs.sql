@@ -1,5 +1,7 @@
 -- name: ListBugsForPackage :many
--- Bugs against a binary package or its source, most severe first.
+-- Bugs against a binary package or its source, most severe first, with
+-- everything the list shows about one bug. There is no bug page to click
+-- through to, so the tags come along here rather than one query per row.
 --
 -- Archived bugs are excluded because a package page is about the present. The
 -- partial indexes in db/migrations cover exactly this predicate. Status and
@@ -13,12 +15,21 @@ SELECT
     severity,
     status,
     submitter_name,
+    forwarded,
     arrival,
     last_modified,
     done,
     affects_stable,
     affects_testing,
-    affects_unstable
+    affects_unstable,
+    coalesce(
+        (
+            SELECT array_agg(bug_tags.tag ORDER BY bug_tags.tag)
+            FROM bug_tags
+            WHERE bug_tags.bug_number = bugs.number
+        ),
+        '{}'
+    )::text [] AS tags
 FROM bugs
 WHERE
     NOT archived
@@ -38,34 +49,6 @@ ORDER BY
     END ASC,
     number DESC
 LIMIT sqlc.arg(max_results);
-
--- name: GetBug :one
-SELECT
-    number,
-    package,
-    source,
-    title,
-    severity,
-    status,
-    submitter_name,
-    owner,
-    forwarded,
-    arrival,
-    last_modified,
-    done,
-    archived,
-    affects_stable,
-    affects_testing,
-    affects_unstable,
-    affects_experimental
-FROM bugs
-WHERE number = $1;
-
--- name: ListBugTags :many
-SELECT tag
-FROM bug_tags
-WHERE bug_number = $1
-ORDER BY tag ASC;
 
 -- name: CountOpenBugsForPackage :one
 SELECT count(*) AS total

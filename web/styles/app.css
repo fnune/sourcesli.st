@@ -38,6 +38,21 @@
     --color-notice: #fffbeb;
     --color-notice-line: #fde68a;
     --color-notice-ink: #78350f;
+
+    /* One colour per BTS severity: a list ordered by severity is read down the
+       column before any of it is read as words, and four shades of the same red
+       cannot say which of them means drop everything. The three that ask nothing
+       of the reader are ink alone, so that the marks stay rare enough to mean
+       something. */
+    --color-severity-critical: #b91c1c;
+    --color-severity-critical-ink: #fef2f2;
+    --color-severity-grave: #fecaca;
+    --color-severity-grave-ink: #991b1b;
+    --color-severity-serious: #ffedd5;
+    --color-severity-serious-ink: #9a3412;
+    --color-severity-important: #fef3c7;
+    --color-severity-important-ink: #92400e;
+    --color-severity-wishlist-ink: #1d4ed8;
 }
 
 /* Following the system preference, with no toggle: a switch would need
@@ -67,6 +82,16 @@
         --color-notice: #2b1d05;
         --color-notice-line: #5a3d0a;
         --color-notice-ink: #fcd34d;
+
+        --color-severity-critical: #991b1b;
+        --color-severity-critical-ink: #fee2e2;
+        --color-severity-grave: #4c1414;
+        --color-severity-grave-ink: #fca5a5;
+        --color-severity-serious: #43200a;
+        --color-severity-serious-ink: #fdba74;
+        --color-severity-important: #3a2a06;
+        --color-severity-important-ink: #fcd34d;
+        --color-severity-wishlist-ink: #93c5fd;
     }
 }
 
@@ -76,93 +101,282 @@
     :root {
         color-scheme: light dark;
     }
+
+    /* One colour per suite, in the order they age: an amber on its way out, a
+       green that is safe, then progressively hotter as the archive gets less
+       finished. Declared here rather than in the theme because no utility is
+       generated from them, and Tailwind drops theme values nothing uses. */
+    :root {
+        --color-suite-oldstable: #b45309;
+        --color-suite-stable: #15803d;
+        --color-suite-testing: #1d4ed8;
+        --color-suite-unstable: #7e22ce;
+        --color-suite-experimental: #b91c1c;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --color-suite-oldstable: #f59e0b;
+            --color-suite-stable: #4ade80;
+            --color-suite-testing: #60a5fa;
+            --color-suite-unstable: #c084fc;
+            --color-suite-experimental: #f87171;
+        }
+    }
 }
 
 /* The search field keeps its own focus ring rather than inheriting the browser
    default, because the autocompletion panel below it needs the two to read as
    one control. */
 @layer components {
-    /* A select's default line height is not the page's, so without leading
-       stated here the suite control comes out shorter than the field beside
-       it. The button carries the same metrics for the same reason. */
+    /* An input, a select and a button each resolve their own line box, so
+       padding alone lands them at three different heights in the same row. The
+       height is stated instead, once, and every control in the masthead is that
+       tall whatever the browser thinks of its contents. */
     .field {
-        @apply w-full rounded-md border border-line-strong bg-surface px-3 py-2
-        leading-6 text-ink outline-none;
+        @apply h-10 w-full rounded-md border border-line-strong bg-surface px-3
+        text-ink outline-none;
     }
 
+    select.field {
+        @apply cursor-pointer;
+    }
+
+    /* Tailwind v4 leaves buttons on the default cursor, so a button says it is
+       one only by looking like one. The pointer is the other half of that. */
     .button {
-        @apply rounded-md border border-accent bg-accent px-4 py-2 leading-6
-        text-on-accent;
+        @apply inline-flex h-10 cursor-pointer items-center justify-center
+        gap-1.5 rounded-md border border-accent bg-accent px-4 text-on-accent
+        transition duration-150;
+    }
+
+    /* Twelve tiles carry one of these, where the masthead's size would shout. */
+    .button-small {
+        @apply h-8 px-3 text-sm;
+    }
+
+    .button:hover {
+        @apply border-ink-muted bg-ink-muted;
+    }
+
+    .button:focus-visible {
+        @apply outline-none ring-2 ring-ring;
     }
 
     .field:focus {
         @apply border-accent ring-2 ring-ring;
     }
 
-    /* Radio cards: the input is visually hidden but stays focusable, so the
-       card must carry both the checked and the focus state for it. */
-    .choice {
-        @apply cursor-pointer;
+    /* Which suite a page is about is a fact the reader has to hold while
+       reading it, so it is carried by colour rather than by a word repeated
+       everywhere: the rule under the masthead, and a dot wherever a suite is
+       named beside its siblings. Each element states its own suite, so a list
+       of suites is a list of colours. */
+    .suite {
+        --suite: var(--color-line-strong);
     }
 
-    .choice-card {
-        @apply block h-full rounded-md border border-line-strong bg-surface px-3
-        py-2;
+    .suite-oldstable {
+        --suite: var(--color-suite-oldstable);
     }
 
-    .choice-pill {
-        @apply block rounded-full border border-line-strong bg-surface px-3
-        py-1.5 text-sm;
+    .suite-stable {
+        --suite: var(--color-suite-stable);
     }
 
-    .choice input:checked + .choice-card,
-    .choice input:checked + .choice-pill {
-        @apply border-accent ring-1 ring-accent;
+    .suite-testing {
+        --suite: var(--color-suite-testing);
     }
 
-    .choice input:focus-visible + .choice-card,
-    .choice input:focus-visible + .choice-pill {
-        @apply ring-2 ring-ring;
+    .suite-unstable {
+        --suite: var(--color-suite-unstable);
     }
 
-    /* One grid for the whole page: a wide column and a fixed answer column.
-       Everything that spans the page sits on it, so the search field, the
-       choices under it, and the answer beside them share two edges instead of
-       each ending wherever its own layout put it. */
-    .page-grid {
-        @apply gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]
-        lg:items-start;
+    .suite-experimental {
+        --suite: var(--color-suite-experimental);
     }
 
-    /* Each question opens with a legend and a gap before its cards. The answer
-       has no question to state, so it takes that same height as a margin and
-       starts level with the first row of choices, computed from the tokens the
-       legend itself uses rather than from a number that would drift from it. */
-    .answer-column {
-        @apply lg:mt-[calc(var(--text-sm)*var(--text-sm--line-height)+var(--spacing)*2)];
+    /* Inline rather than a flex item: an inline flex box takes its baseline
+       from its first child, which for a dot with no text sits the words beside
+       it off the line. This keeps the text in normal inline flow and lifts only
+       the dot. */
+    /* The wordmark: a domain set as a console badge. Uppercase and letterspaced
+       carries the era without a typeface to ship or an effect to explain, and
+       the suffix drops back in tone so the name reads as a name rather than as
+       a URL. The letters are uppercased in CSS, so what a screen reader
+       announces, and what is in the markup, is still sourcesli.st. */
+    /* Bordered like the controls beside it: a bare glyph in a row of boxes
+       reads as a stray mark rather than as the first of four things. */
+    .wordmark {
+        @apply inline-flex h-10 w-10 items-center justify-center rounded-md
+        border border-line-strong bg-surface text-ink-muted no-underline
+        transition duration-150;
     }
 
-    /* Stands in for the desktop screenshots on the "no desktop" card. It
-       depicts a terminal, so it is black under either scheme. */
-    .terminal {
-        @apply flex aspect-video w-full items-start whitespace-nowrap
-        bg-neutral-900 px-3 py-2 font-mono text-xs text-neutral-100;
+    .wordmark:hover {
+        @apply border-accent text-ink;
     }
 
-    /* Non-live images carry no desktop, so the desktop cards grey out and an
-       overlay says why. CSS reacts to the checked flavour radio, because htmx
-       only refreshes the answer card, not the form. */
-    .desktop-overlay {
+    .wordmark:focus-visible {
+        @apply outline-none ring-2 ring-ring;
+    }
+
+    /* Completions belong to the field: they are shown while it has the focus,
+       or while the pointer is over them on its way to one, and they are gone the
+       moment attention is elsewhere. Hiding them in CSS rather than fetching an
+       empty list means no request and no flicker. */
+    .search-field {
+        @apply relative;
+    }
+
+    .search-field #completions {
         @apply hidden;
     }
 
-    #images-form:has(input[name="flavour"]:checked:not(#flavour-live))
-    .desktop-grid {
-        @apply pointer-events-none opacity-40 grayscale;
+    .search-field:focus-within #completions,
+    .search-field #completions:hover {
+        @apply block;
     }
 
-    #images-form:has(input[name="flavour"]:checked:not(#flavour-live))
-    .desktop-overlay {
-        @apply flex;
+    /* The suite picker: a summary styled as a field, and the menu under it. The
+       browser's own marker goes, since the dot and the chevron say enough. */
+    .suite-picker {
+        @apply relative;
+    }
+
+    /* A suite is written in mono everywhere else it appears, including in the
+       menu this opens, and mono is what makes the width predictable: the box is
+       as wide as the longest name it can hold, so picking experimental does not
+       shorten the search field beside it. */
+    .suite-picker summary {
+        @apply inline-flex w-[calc(12ch+3.5rem)] cursor-pointer list-none
+        items-center justify-between font-mono;
+    }
+
+    .suite-picker summary::-webkit-details-marker {
+        display: none;
+    }
+
+    /* Clicking away closes it, with no JavaScript: while the menu is open the
+       summary also covers the viewport behind it, so a click anywhere outside
+       lands on the summary and toggles it shut. The menu sits above that sheet,
+       so its own links still take the click. */
+    .suite-picker[open] summary::before {
+        content: "";
+        inset: 0;
+        position: fixed;
+        z-index: 0;
+    }
+
+    .suite-picker summary:focus-visible {
+        @apply border-accent outline-none ring-2 ring-ring;
+    }
+
+    .suite-picker summary::after {
+        @apply pl-2 text-ink-subtle;
+        content: "\25be";
+    }
+
+    .suite-menu {
+        @apply absolute right-0 z-10 mt-1 min-w-56 overflow-hidden rounded-md
+        border border-line-strong bg-surface py-1 shadow-lg;
+    }
+
+    .suite-mark {
+        background-color: var(--suite);
+        border-radius: 9999px;
+        display: inline-block;
+        height: 0.5rem;
+        margin-right: 0.375rem;
+        vertical-align: middle;
+        width: 0.5rem;
+    }
+
+    /* Nothing on a tile is clickable except the two controls in its footer, so
+       the card itself has no hover state to mislead with. */
+    .tile {
+        @apply overflow-hidden rounded-md border border-line-strong bg-surface;
+    }
+
+    /* The screens under the caption: pictures of a fixed thing, so they keep
+       their own colours under either scheme, like the screenshots beside
+       them. */
+    .screen {
+        @apply block aspect-video w-full overflow-hidden font-mono text-[0.5rem]
+        leading-relaxed;
+    }
+
+    .screen-terminal {
+        @apply bg-neutral-900 px-3 py-2 text-xs text-neutral-100;
+    }
+
+    .screen-installer {
+        @apply bg-[#0f2b46] p-2 text-neutral-100;
+    }
+
+    /* The dialog is transcribed at the size it fits, and clipped where it does
+       not: a menu that runs past the bottom of the screen is what the installer
+       looks like too. */
+    .screen-dialog {
+        @apply block h-full overflow-hidden rounded-xs border border-neutral-400
+        bg-neutral-700 px-1 pb-1;
+    }
+
+    .screen-title {
+        @apply -mx-1 mb-1 block bg-neutral-200 px-1 text-neutral-900;
+    }
+
+    /* The severity mark. A filled one is a claim on the reader's attention, so
+       only the severities that make one carry a background. */
+    .severity {
+        @apply rounded px-1 text-xs;
+    }
+
+    .severity-critical {
+        @apply bg-severity-critical text-severity-critical-ink;
+    }
+
+    .severity-grave {
+        @apply bg-severity-grave text-severity-grave-ink;
+    }
+
+    .severity-serious {
+        @apply bg-severity-serious text-severity-serious-ink;
+    }
+
+    .severity-important {
+        @apply bg-severity-important text-severity-important-ink;
+    }
+
+    .severity-normal {
+        @apply text-ink-muted;
+    }
+
+    .severity-minor {
+        @apply text-ink-subtle;
+    }
+
+    .severity-wishlist {
+        @apply text-severity-wishlist-ink;
+    }
+
+    /* What the snapshot knows about a bug is a run of short phrases, and a run
+       of short phrases separated by spaces alone reads as one long sentence.
+       The separator is drawn here rather than written into the template because
+       which phrase comes first depends on what was recorded.
+       It trails the phrase it follows rather than leading the next one: the
+       line wraps between phrases, and a leading separator would then be left
+       dangling at the start of the wrapped line. */
+    .bug-facts > *:not(:last-child)::after {
+        content: "·";
+        @apply ml-1.5 text-line-strong;
+    }
+
+    /* One grid for the whole page: a wide column and a narrow one. Everything
+       that spans the page sits on it, so the search field ends where the
+       content below it ends instead of wherever its own layout put it. */
+    .page-grid {
+        @apply gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]
+        lg:items-start;
     }
 }

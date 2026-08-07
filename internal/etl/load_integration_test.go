@@ -113,10 +113,13 @@ func seedUpstream(t *testing.T, pool *pgxpool.Pool) {
 		`INSERT INTO udd_raw.sources (source, version, maintainer_name, distribution, release, component)
 		 VALUES ('bash', '5.3-3', 'Matthias Klose', 'debian', 'sid', 'main')`,
 
-		`INSERT INTO udd_raw.bugs (id, package, source, arrival, status, severity, title, last_modified)
+		`INSERT INTO udd_raw.bugs
+			(id, package, source, arrival, status, severity, title, last_modified, submitter_name)
 		 VALUES
-			(1, 'bash', 'bash', '2026-05-13 10:09:03', 'pending', 'minor', 'a bug', '2026-05-14 00:00:00'),
-			(2, 'bash', 'bash', '2026-01-01 00:00:00', 'done', 'grave', 'a closed bug', '2026-02-01 00:00:00')`,
+			(1, 'bash', 'bash', '2026-05-13 10:09:03', 'pending', 'minor', 'a bug', '2026-05-14 00:00:00',
+			 '"ISHIKAWA,chiaki"'),
+			(2, 'bash', 'bash', '2026-01-01 00:00:00', 'done', 'grave', 'a closed bug', '2026-02-01 00:00:00',
+			 'Matthias Klose')`,
 
 		`INSERT INTO udd_raw.archived_bugs (id, package, source, arrival, status, severity, title)
 		 VALUES (3, 'bash', 'bash', '2020-01-01 00:00:00', 'done', 'normal', 'an archived bug')`,
@@ -252,6 +255,30 @@ func TestLoadDerivesBugStateFromStatus(t *testing.T) {
 	}
 	if got := count(t, pool, `SELECT count(*) FROM bugs WHERE number = 1 AND NOT done AND NOT archived`); got != 1 {
 		t.Error("an open bug should be neither done nor archived")
+	}
+}
+
+// A submitter whose name holds a comma or a full stop reaches UDD wrapped in
+// the quotes that made it one mail token. They are part of the address, and a
+// page that prints them is quoting nobody.
+func TestLoadUnquotesSubmitterNames(t *testing.T) {
+	pool := requireDatabase(t)
+	migrateFresh(t, pool)
+	seedUpstream(t, pool)
+
+	if _, err := newLoader(t, pool).Load(t.Context()); err != nil {
+		t.Fatalf("loading: %v", err)
+	}
+
+	var name string
+	if err := pool.QueryRow(
+		t.Context(),
+		`SELECT submitter_name FROM bugs WHERE number = 1`,
+	).Scan(&name); err != nil {
+		t.Fatalf("reading the submitter: %v", err)
+	}
+	if name != "ISHIKAWA,chiaki" {
+		t.Errorf("submitter_name = %q, want it without the address quoting", name)
 	}
 }
 

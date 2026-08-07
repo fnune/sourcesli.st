@@ -14,7 +14,7 @@ What the project has to do, and the constraints it has to do it under. Principle
 ### Bug browsing
 
 - Search and filter bugs by package, severity, status, and tag. Not yet implemented as its own page; the package page filters by severity and status, the rest is planned.
-- A bug page shows the metadata UDD carries and links to the BTS for the full log.
+- Individual bugs are not a page of their own: the list links straight to the BTS, which has the metadata and the message log both.
 
 ### ISO chooser
 

@@ -5,12 +5,13 @@
   without JavaScript the form still submits to /search for a full page of
   results.
 
-  It is laid out on the page grid rather than as a row of its own, so the field
-  ends where the column below it ends and the suite starts where the column
-  beside it starts.
+  It lives in the header, so it is on every page rather than on the two that
+  used to draw it, and the masthead is one row instead of a bar with a word in
+  it and a form floating under it.
 */}}
-<form class="page-grid mt-6" action="/search" method="get" role="search">
-    <div class="lg:col-start-1 lg:row-start-1">
+<form class="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:flex-1"
+      action="/search" method="get" role="search">
+    <div class="search-field min-w-48 flex-1">
         <label class="sr-only" for="q">Package name or description</label>
         <input
             class="field"
@@ -27,25 +28,36 @@
             hx-include="[name='suite']"
             hx-sync="this:replace">
 
-        <div id="completions" class="relative"></div>
+        <div id="completions"></div>
     </div>
 
-    <div class="mt-2 flex gap-2 lg:col-start-2 lg:row-start-1 lg:mt-0">
-        <label class="sr-only" for="suite">Suite</label>
-        {{/*
-          Without autocomplete="off" Firefox restores whatever suite was last
-          picked when the page is reloaded, so the page says stable and the
-          control says something else.
-        */}}
-        <select class="field min-w-0 flex-1" id="suite" name="suite" autocomplete="off">
+    {{/*
+      A menu of links rather than a select: an option cannot hold a coloured dot,
+      and switching suite is a navigation like every other on the site. The
+      hidden field keeps a search bound to the suite being read, and details
+      opens and closes on its own, so none of this needs JavaScript.
+    */}}
+    <input type="hidden" name="suite" value="{{.Suite}}">
+
+    <details class="suite-picker suite suite-{{.Suite}} flex-none">
+        <summary class="field whitespace-nowrap" aria-label="Suite: {{.Suite}}. Choose another">
+            <span><span class="suite-mark" aria-hidden="true"></span>{{.Suite}}</span>
+        </summary>
+        <ul class="suite-menu" aria-label="Switch suite">
             {{range .Suites}}
-            <option value="{{.Name}}" {{if eq .Name $.Suite}}selected{{end}}>
-                {{.Name}}{{if .Codename}} ({{.Codename}}){{end}}
-            </option>
+            <li>
+                <a class="suite suite-{{.Name}} flex items-baseline gap-2 px-3 py-2 no-underline hover:bg-muted focus-visible:bg-muted"
+                   href="{{.URL}}" {{if .Current}}aria-current="page"{{end}}>
+                    <span class="font-mono text-sm">
+                        <span class="suite-mark" aria-hidden="true"></span>{{.Name}}</span>
+                    {{if .Codename}}<span class="text-sm text-ink-subtle">{{.Codename}}</span>{{end}}
+                    {{if .Current}}<span class="sr-only">(current)</span>{{end}}
+                </a>
+            </li>
             {{end}}
-        </select>
+        </ul>
+    </details>
 
-        <button class="button flex-none" type="submit">Search</button>
-    </div>
+    <button class="button flex-none" type="submit">Search</button>
 </form>
 {{end}}

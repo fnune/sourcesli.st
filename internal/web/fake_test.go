@@ -14,28 +14,29 @@ import (
 // awkward cases: a package with no source, a bug that does not exist, a
 // database that has never been ingested into.
 type fakeQueries struct {
-	suites        []query.Suite
-	search        []query.SearchPackagesRow
-	completions   []query.CompletePackageNamesRow
-	suggestions   []query.SuggestSimilarPackagesRow
-	binaries      map[string][]query.GetBinaryPackageRow
-	sources       map[string]query.SourcePackage
-	fresh         map[string]query.GetFreshVersionRow
-	bugs          map[int32]query.Bug
-	bugList       []query.ListBugsForPackageRow
-	bugTags       []string
-	openBugs      int64
-	lastSync      *time.Time
-	isoVersions   []query.ListISOVersionsRow
-	top           []query.ListTopPackagesRow
-	suiteVersions []query.ListPackageSuitesRow
-	screenshots   map[string]query.GetScreenshotRow
+	suites          []query.Suite
+	search          []query.SearchPackagesRow
+	completions     []query.CompletePackageNamesRow
+	suggestions     []query.SuggestSimilarPackagesRow
+	binaries        map[string][]query.GetBinaryPackageRow
+	sources         map[string]query.SourcePackage
+	fresh           map[string]query.GetFreshVersionRow
+	bugList         []query.ListBugsForPackageRow
+	openBugs        int64
+	lastSync        *time.Time
+	isoVersions     []query.ListISOVersionsRow
+	top             []query.ListTopPackagesRow
+	suiteVersions   []query.ListPackageSuitesRow
+	packageVersions []query.ListPackageVersionsRow
+	isoSizes        []query.ListISOSizesRow
+	screenshots     map[string]query.GetScreenshotRow
 
 	// failWith is returned by every method when set, so a test can assert that
 	// a database failure becomes a 500 rather than a half-rendered page.
 	failWith error
 
 	searchCalledWith  query.SearchPackagesParams
+	topCalledWith     query.ListTopPackagesParams
 	suggestCalledWith query.SuggestSimilarPackagesParams
 	bugsCalledWith    query.ListBugsForPackageParams
 }
@@ -135,31 +136,14 @@ func (f *fakeQueries) CountOpenBugsForPackage(context.Context, string) (int64, e
 	return f.openBugs, nil
 }
 
-func (f *fakeQueries) GetBug(_ context.Context, number int32) (query.Bug, error) {
-	if f.failWith != nil {
-		return query.Bug{}, f.failWith
-	}
-	bug, ok := f.bugs[number]
-	if !ok {
-		return query.Bug{}, pgx.ErrNoRows
-	}
-	return bug, nil
-}
-
-func (f *fakeQueries) ListBugTags(context.Context, int32) ([]string, error) {
-	if f.failWith != nil {
-		return nil, f.failWith
-	}
-	return f.bugTags, nil
-}
-
 func (f *fakeQueries) ListTopPackages(
-	context.Context,
-	query.ListTopPackagesParams,
+	_ context.Context,
+	arg query.ListTopPackagesParams,
 ) ([]query.ListTopPackagesRow, error) {
 	if f.failWith != nil {
 		return nil, f.failWith
 	}
+	f.topCalledWith = arg
 	return f.top, nil
 }
 
@@ -168,6 +152,23 @@ func (f *fakeQueries) ListPackageSuites(context.Context, string) ([]query.ListPa
 		return nil, f.failWith
 	}
 	return f.suiteVersions, nil
+}
+
+func (f *fakeQueries) ListISOSizes(context.Context) ([]query.ListISOSizesRow, error) {
+	if f.failWith != nil {
+		return nil, f.failWith
+	}
+	return f.isoSizes, nil
+}
+
+func (f *fakeQueries) ListPackageVersions(
+	context.Context,
+	query.ListPackageVersionsParams,
+) ([]query.ListPackageVersionsRow, error) {
+	if f.failWith != nil {
+		return nil, f.failWith
+	}
+	return f.packageVersions, nil
 }
 
 func (f *fakeQueries) GetScreenshot(_ context.Context, name string) (query.GetScreenshotRow, error) {

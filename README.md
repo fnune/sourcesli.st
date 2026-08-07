@@ -28,7 +28,7 @@ Go for both binaries, Postgres for storage, server-rendered HTML with [htmx](htt
 cmd/web            HTTP server
 cmd/ingest         UDD sync job, applies migrations then runs the pipeline
 internal/domain    package, bug, and severity types; parsing only, no IO
-internal/images    the ISO chooser; pure logic over Debian's directory layout
+internal/images    the image catalogue; pure logic over Debian's directory layout
 internal/etl       extract, transform, and load
 internal/store     migrations, connection handling, sqlc-generated queries
 internal/web       handlers and template rendering
@@ -45,10 +45,11 @@ nix/               package, images, checks, dev environment
 
 ### Pages
 
-- `/` is the ISO chooser, with search above it. The chooser contacts nothing: the recommendation is derived from the answers and Debian's stable directory layout. `/images` redirects here.
+- `/` lists every image Debian publishes for these machines, grouped by hardware, with search above it. It contacts nothing: filenames and URLs are derived from Debian's directory layout and the point release ingest observed. `/images` redirects here.
+- `/d/{image}` is one image: what it lands as, and the checksum and signature to check it against.
 - `/search` searches binary and source packages, with htmx autocompletion over a form that works without it, and offers near names when a query matches nothing.
 - `/p/{suite}/{name}` shows versions per architecture, dependencies, the source package, and bugs filterable by status and severity. Source-only packages get the same page built from their source record.
-- `/b/{number}` shows one bug and links to the BTS for its live state.
+- `/b/{number}` redirects to the bug in the BTS, which holds the live record a page here could only snapshot.
 - `/healthz` answers 200 while the database is reachable. An empty database is healthy; an unreachable one is not.
 
 ## Development

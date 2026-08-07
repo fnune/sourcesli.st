@@ -3,6 +3,13 @@
 
 -- name: SearchPackages :many
 -- Full-text search across package names and synopses, most popular first.
+--
+-- Full-text search matches whole words, so `fire` finds "Fire an event" and not
+-- firefox-esr: to Postgres those are different lexemes. A reader typing the
+-- start of a name means the name, and the autocompletion beside this query
+-- already behaves that way, so a prefix of a name matches here too and sorts
+-- above the prose. Both halves are served by their own index.
+--
 -- A name can appear as both a binary and a source package. Collapsing to one
 -- row keeps a reader from seeing the same name twice with no way to tell why;
 -- the binary wins because that is the page a search result links to.
@@ -20,14 +27,18 @@ FROM (
         suite,
         version,
         synopsis,
-        popularity
+        popularity,
+        name LIKE lower(sqlc.arg(query)::text) || '%' AS names_it
     FROM package_search
     WHERE
         suite = sqlc.arg(suite)
-        AND document @@ websearch_to_tsquery('english', sqlc.arg(query))
+        AND (
+            document @@ websearch_to_tsquery('english', sqlc.arg(query))
+            OR name LIKE lower(sqlc.arg(query)::text) || '%'
+        )
     ORDER BY name ASC, (kind = 'binary') DESC
 ) AS deduplicated
-ORDER BY popularity DESC, name ASC
+ORDER BY names_it DESC, popularity DESC, name ASC
 LIMIT sqlc.arg(max_results);
 
 -- name: CompletePackageNames :many
@@ -241,3 +252,24 @@ SELECT
     channel,
     version
 FROM iso_versions;
+
+-- name: ListPackageVersions :many
+-- The versions of a handful of named packages in one suite. The download page
+-- states what a live image's desktop ships as, and this is where that number
+-- comes from: our own copy of the archive rather than a constant in the code.
+SELECT
+    name,
+    version
+FROM package_search
+WHERE
+    suite = sqlc.arg(suite)
+    AND kind = 'binary'
+    AND name = any(sqlc.arg(names)::text []);
+
+-- name: ListISOSizes :many
+-- The sizes ingest last observed on cdimage, keyed by the catalogue identifier
+-- the download page addresses each image by.
+SELECT
+    image,
+    bytes
+FROM iso_sizes;

@@ -1,11 +1,17 @@
 {{define "complete"}}
 {{if .}}
+{{/*
+  One line per row: a completion list is scanned, not read, and a synopsis that
+  wraps makes rows of two different heights whose padding then reads as uneven.
+  The synopsis is cut off instead, since the name is what is being matched.
+*/}}
 <ul class="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-line-strong bg-surface shadow-lg">
     {{range .}}
     <li>
-        <a class="block px-3 py-2 hover:bg-muted" href="/p/{{.Suite}}/{{.Name}}">
-            <span class="font-mono">{{.Name}}</span>
-            {{if .Synopsis}}<span class="ml-2 text-sm text-ink-subtle">{{.Synopsis}}</span>{{end}}
+        <a class="flex items-baseline gap-2 px-3 py-2 no-underline hover:bg-muted"
+           href="/p/{{.Suite}}/{{.Name}}">
+            <span class="flex-none font-mono">{{.Name}}</span>
+            {{if .Synopsis}}<span class="truncate text-sm text-ink-subtle">{{.Synopsis}}</span>{{end}}
         </a>
     </li>
     {{end}}

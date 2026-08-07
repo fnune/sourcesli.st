@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -51,12 +52,15 @@ type Queries interface {
 	GetFreshVersion(ctx context.Context, arg query.GetFreshVersionParams) (query.GetFreshVersionRow, error)
 	ListBugsForPackage(ctx context.Context, arg query.ListBugsForPackageParams) ([]query.ListBugsForPackageRow, error)
 	CountOpenBugsForPackage(ctx context.Context, package_ string) (int64, error)
-	GetBug(ctx context.Context, number int32) (query.Bug, error)
-	ListBugTags(ctx context.Context, bugNumber int32) ([]string, error)
 	GetLastSync(ctx context.Context) (query.GetLastSyncRow, error)
 	ListISOVersions(ctx context.Context) ([]query.ListISOVersionsRow, error)
 	ListTopPackages(ctx context.Context, arg query.ListTopPackagesParams) ([]query.ListTopPackagesRow, error)
 	ListPackageSuites(ctx context.Context, name string) ([]query.ListPackageSuitesRow, error)
+	ListPackageVersions(
+		ctx context.Context,
+		arg query.ListPackageVersionsParams,
+	) ([]query.ListPackageVersionsRow, error)
+	ListISOSizes(ctx context.Context) ([]query.ListISOSizesRow, error)
 	GetScreenshot(ctx context.Context, name string) (query.GetScreenshotRow, error)
 }
 
@@ -76,28 +80,31 @@ func NewServer(queries Queries, templates, assets fs.FS, logger *slog.Logger) (*
 	// Every page is parsed with the layout and the shared partials, as its own
 	// template set. Parsing them all into one set is impossible because each
 	// page defines "title" and "content" under the same names.
-	// A NULL timestamp reaches Go as the zero time rather than a nil pointer,
-	// and a struct is always truthy in a template, so pages need this to tell
-	// "no date recorded" from a date.
-	functions := template.FuncMap{
-		"isZeroTime": func(t time.Time) bool { return t.IsZero() },
+	shared := []string{"layout.html", "searchform.html", "results.html", "screen.html"}
+	pageNames := []string{
+		"index.html", "image.html", "search.html", "package.html", "message.html",
 	}
 
-	shared := []string{"layout.html", "searchform.html", "results.html", "recommendation.html"}
-	pageNames := []string{
-		"index.html", "search.html", "package.html", "bug.html", "message.html",
+	// Inline rather than linked: a page cannot paint before a stylesheet it
+	// carries, and this one is smaller than any screenshot on the front page.
+	stylesheet, err := fs.ReadFile(assets, "app.css")
+	if err != nil {
+		return nil, fmt.Errorf("reading the stylesheet: %w", err)
+	}
+	funcs := template.FuncMap{
+		"stylesheet": func() template.CSS { return template.CSS(stylesheet) },
 	}
 
 	pages := make(map[string]*template.Template, len(pageNames))
 	for _, page := range pageNames {
-		parsed, err := template.New(page).Funcs(functions).ParseFS(templates, append(shared, page)...)
+		parsed, err := template.New(page).Funcs(funcs).ParseFS(templates, append(shared, page)...)
 		if err != nil {
 			return nil, fmt.Errorf("parsing template %s: %w", page, err)
 		}
 		pages[page] = parsed
 	}
 
-	fragments, err := template.New("fragments").ParseFS(templates, "complete.html")
+	fragments, err := template.New("fragments").Funcs(funcs).ParseFS(templates, "complete.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing fragment templates: %w", err)
 	}
@@ -119,7 +126,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /search", s.handleSearch)
 	mux.HandleFunc("GET /complete", s.handleComplete)
 	mux.HandleFunc("GET /p/{suite}/{name}", s.handlePackage)
-	mux.HandleFunc("GET /b/{number}", s.handleBug)
+	mux.HandleFunc("GET /b/{number}", s.handleBugMoved)
+	mux.HandleFunc("GET /d/{image}", s.handleImage)
 	mux.HandleFunc("GET /images", s.handleImagesMoved)
 	mux.HandleFunc("GET /screenshots/{name}", s.handleScreenshot)
 	mux.HandleFunc("GET /healthz", s.handleHealth)
@@ -129,9 +137,44 @@ func (s *Server) Handler() http.Handler {
 
 type layoutData struct {
 	DataAsOf *time.Time
-	Suites   []query.Suite
+	Suites   []suiteChoice
 	Suite    string
 	Query    string
+}
+
+// suiteChoice is one entry in the suite picker: where switching to it goes, and
+// whether it is the one being read. A native select cannot hold a coloured dot,
+// so the picker is a menu of links, which also makes switching a navigation
+// rather than a form field nobody submits.
+type suiteChoice struct {
+	Name     string
+	Codename string
+	URL      string
+	Current  bool
+}
+
+// suiteChoices builds that menu. The target is a route this package decides on
+// rather than the path that was asked for: a menu built from the request echoes
+// whatever a visitor put in the URL back into the page, including on the pages
+// that exist to say the URL was wrong.
+func suiteChoices(suites []query.Suite, current, searchQuery string) []suiteChoice {
+	choices := make([]suiteChoice, 0, len(suites))
+	for _, suite := range suites {
+		parameters := url.Values{"suite": {suite.Name}}
+		path := "/"
+		if strings.TrimSpace(searchQuery) != "" {
+			path = "/search"
+			parameters.Set("q", searchQuery)
+		}
+
+		choices = append(choices, suiteChoice{
+			Name:     suite.Name,
+			Codename: suite.Codename,
+			URL:      path + "?" + parameters.Encode(),
+			Current:  suite.Name == current,
+		})
+	}
+	return choices
 }
 
 type searchData struct {
@@ -193,17 +236,65 @@ func nextLimit(returned int, limit, maximum int32) int {
 	return int(min(limit+pageStep, maximum))
 }
 
+// bugSummary is one row of the bug list, which is the whole of what this site
+// says about a bug: there is no page behind it, only the bug tracking system.
+// Dates arrive formatted because a NULL timestamp reaches Go as the zero time
+// rather than a nil pointer, and a template cannot tell the two apart.
 type bugSummary struct {
-	Number          int32
-	Title           string
-	Severity        string
-	ReleaseCritical bool
+	Number   int32
+	Title    string
+	Severity string
+	// SeverityKey is the severity the BTS defines, empty when it defines no such
+	// severity. The page colours the mark by it, and has no colour for a value
+	// nobody recognises.
+	SeverityKey string
+	Done        bool
+	Status      string
+	// Package and Source are set only when they add something the reader cannot
+	// already see: this page is one package, and most bugs are filed against it.
+	Package       string
+	Source        string
+	SubmitterName string
+	// Forwarded is the address upstream, usually a URL long enough to swamp the
+	// row it sits on. ForwardedTo is what the row shows: the host it points at,
+	// with the address itself kept for the title attribute.
+	Forwarded    string
+	ForwardedTo  string
+	Reported     dateLabel
+	LastModified dateLabel
+	Tags         []string
 }
 
-type bugData struct {
-	layoutData
-	Bug  query.Bug
-	Tags []string
+// HasDetail says whether the second line of a row would carry anything, so that
+// a bug the snapshot knows nothing else about does not get an empty one.
+func (b bugSummary) HasDetail() bool {
+	return b.Done || b.Status != "" || b.Package != "" || b.Source != "" ||
+		b.SubmitterName != "" || b.Forwarded != "" ||
+		b.Reported.Text != "" || b.LastModified.Text != "" || len(b.Tags) > 0
+}
+
+// dateLabel is a date in both the forms a page needs: one for the reader and
+// one for the machine attribute. Both are empty when nothing was recorded.
+type dateLabel struct {
+	Text    string
+	Machine string
+}
+
+func formatDate(t time.Time) dateLabel {
+	if t.IsZero() {
+		return dateLabel{}
+	}
+	return dateLabel{Text: t.Format("2 Jan 2006"), Machine: t.Format("2006-01-02")}
+}
+
+// forwardedTo shortens an upstream address to the host it names. The BTS also
+// carries addresses that are not URLs at all, and those are left as they are.
+func forwardedTo(address string) string {
+	parsed, err := url.Parse(address)
+	if err != nil || parsed.Host == "" {
+		return address
+	}
+	return parsed.Host
 }
 
 type messageData struct {
@@ -214,13 +305,21 @@ type messageData struct {
 
 type indexData struct {
 	layoutData
-	Top            []query.ListTopPackagesRow
-	Choice         images.Choice
-	Recommendation images.Recommendation
+	Top    []query.ListTopPackagesRow
+	Groups []images.Group
+	// Detected is the architecture the User-Agent suggests. Its group is listed
+	// first and says so; it is a guess, so nothing is hidden on the strength of
+	// it.
+	Detected images.Architecture
+}
+
+type imageData struct {
+	layoutData
+	Image images.Image
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	layout, err := s.layout(r, "")
+	layout, err := s.layout(w, r, "")
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -235,14 +334,49 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	choice, recommendation := s.chooseImage(r)
+	detected := images.DetectArchitecture(r.UserAgent())
 
 	s.render(w, r, "index.html", http.StatusOK, indexData{
-		layoutData:     layout,
-		Top:            top,
-		Choice:         choice,
-		Recommendation: recommendation,
+		layoutData: layout,
+		Top:        top,
+		Groups:     leading(images.Catalogue(s.catalogueInput(r, s.releases(r))), detected),
+		Detected:   detected,
 	})
+}
+
+// handleImage is one image: what it is, what it lands as, and how to check it.
+func (s *Server) handleImage(w http.ResponseWriter, r *http.Request) {
+	layout, err := s.layout(w, r, "")
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
+	image, ok := images.Find(r.PathValue("image"), s.catalogueInput(r, s.releases(r)))
+	if !ok {
+		s.notFound(w, r, "No such image",
+			"Every image we offer is listed on the front page.")
+		return
+	}
+
+	s.render(w, r, "image.html", http.StatusOK, imageData{layoutData: layout, Image: image})
+}
+
+// leading puts the reader's own hardware first, so an ARM visitor does not
+// scroll past eight images that will not boot on their machine.
+func leading(groups []images.Group, architecture images.Architecture) []images.Group {
+	ordered := make([]images.Group, 0, len(groups))
+	for _, group := range groups {
+		if group.Architecture == architecture {
+			ordered = append(ordered, group)
+		}
+	}
+	for _, group := range groups {
+		if group.Architecture != architecture {
+			ordered = append(ordered, group)
+		}
+	}
+	return ordered
 }
 
 // handleImagesMoved keeps the links that pointed at the chooser working now
@@ -254,7 +388,7 @@ func (s *Server) handleImagesMoved(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// An empty query has nothing to say beyond what the front page already
 	// says, and a results page with no query in it reads as a failure.
-	layout, err := s.layout(r, r.URL.Query().Get("q"))
+	layout, err := s.layout(w, r, r.URL.Query().Get("q"))
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -305,7 +439,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 // page. The name comes from the suite list rather than from the URL, so the
 // redirect can only ever point at a suite we serve, and stable is left implicit
 // because it is the default.
-func indexFor(suites []query.Suite, selected string) string {
+func indexFor(suites []suiteChoice, selected string) string {
 	for _, suite := range suites {
 		if suite.Name == selected && suite.Name != "stable" {
 			return "/?suite=" + suite.Name
@@ -350,12 +484,16 @@ func (s *Server) handlePackage(w http.ResponseWriter, r *http.Request) {
 	}
 	suite := suiteOrDefault(r.PathValue("suite"))
 
-	layout, layoutErr := s.layout(r, "")
+	layout, layoutErr := s.layout(w, r, "")
 	if layoutErr != nil {
 		s.serverError(w, r, layoutErr)
 		return
 	}
 	layout.Suite = suite
+	for index := range layout.Suites {
+		layout.Suites[index].URL = "/p/" + layout.Suites[index].Name + "/" + name.String()
+		layout.Suites[index].Current = layout.Suites[index].Name == suite
+	}
 
 	binaries, err := s.queries.GetBinaryPackage(r.Context(), query.GetBinaryPackageParams{
 		Name:  name.String(),
@@ -461,12 +599,27 @@ func (s *Server) handlePackage(w http.ResponseWriter, r *http.Request) {
 				slog.Int("bug", int(bug.Number)),
 				slog.String("severity", bug.Severity))
 		}
-		data.Bugs = append(data.Bugs, bugSummary{
-			Number:          bug.Number,
-			Title:           bug.Title,
-			Severity:        bug.Severity,
-			ReleaseCritical: severity.IsReleaseCritical(),
-		})
+		summary := bugSummary{
+			Number:        bug.Number,
+			Title:         bug.Title,
+			Severity:      bug.Severity,
+			SeverityKey:   severity.String(),
+			Done:          bug.Done,
+			Status:        bug.Status,
+			SubmitterName: bug.SubmitterName,
+			Forwarded:     bug.Forwarded,
+			ForwardedTo:   forwardedTo(bug.Forwarded),
+			Reported:      formatDate(bug.Arrival),
+			LastModified:  formatDate(bug.LastModified),
+			Tags:          bug.Tags,
+		}
+		if bug.Package != name.String() {
+			summary.Package = bug.Package
+		}
+		if bug.Source != name.String() && bug.Source != bug.Package {
+			summary.Source = bug.Source
+		}
+		data.Bugs = append(data.Bugs, summary)
 	}
 
 	count, err := s.queries.CountOpenBugsForPackage(r.Context(), name.String())
@@ -479,87 +632,121 @@ func (s *Server) handlePackage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "package.html", http.StatusOK, data)
 }
 
-func (s *Server) handleBug(w http.ResponseWriter, r *http.Request) {
+// handleBugMoved sends the bug page this site used to serve to the bug tracking
+// system, which holds the live record this page could only ever snapshot. The
+// number is parsed rather than pasted into the location, so the redirect can
+// only ever point at a bug.
+func (s *Server) handleBugMoved(w http.ResponseWriter, r *http.Request) {
 	number, err := domain.ParseBugNumber(r.PathValue("number"))
 	if err != nil {
 		s.notFound(w, r, "That is not a bug number", "Bug numbers are positive integers.")
 		return
 	}
 
-	layout, err := s.layout(r, "")
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-
-	bug, err := s.queries.GetBug(r.Context(), number.Int32())
-	if errors.Is(err, pgx.ErrNoRows) {
-		s.notFound(w, r, fmt.Sprintf("No bug numbered %s", number),
-			"It may be newer than our last snapshot. The bug tracking system has the live record.")
-		return
-	}
-	if err != nil {
-		s.serverError(w, r, fmt.Errorf("reading bug %s: %w", number, err))
-		return
-	}
-
-	tags, err := s.queries.ListBugTags(r.Context(), bug.Number)
-	if err != nil {
-		s.serverError(w, r, fmt.Errorf("reading tags for bug %s: %w", number, err))
-		return
-	}
-
-	s.render(w, r, "bug.html", http.StatusOK, bugData{layoutData: layout, Bug: bug, Tags: tags})
+	//nolint:gosec // G710 follows the path into the location without seeing that
+	// what arrives there is an integer, and one this site parsed itself.
+	http.Redirect(w, r, fmt.Sprintf("https://bugs.debian.org/%d", number.Int32()), http.StatusMovedPermanently)
 }
 
-// chooseImage answers the "which image do I want" question. It contacts nothing
-// and reads only the observed versions: the recommendation is derived from the
-// answers and Debian's stable directory layout.
-func (s *Server) chooseImage(r *http.Request) (images.Choice, images.Recommendation) {
-	parameters := r.URL.Query()
-	choice := images.Choice{
-		Architecture: images.Architecture(parameters.Get("arch")),
-		Flavour:      images.Flavour(parameters.Get("flavour")),
-		Desktop:      images.Desktop(parameters.Get("desktop")),
-		Offline:      parameters.Get("offline") != "",
+// catalogueInput gathers what the catalogue reads from the database: what the
+// releases are called, which point release they are at, what the desktops ship
+// as, and what cdimage serves each file at. Every one of them degrades to a
+// constant, so an unfilled database renders a page that is out of date rather
+// than one that is broken.
+func (s *Server) catalogueInput(r *http.Request, suites []query.Suite) images.Input {
+	input := images.Input{
+		Stable:    releaseOf(suites, "stable"),
+		Oldstable: releaseOf(suites, "oldstable"),
+		Desktops:  s.desktopVersions(r),
+		Sizes:     s.isoSizes(r),
 	}
 
-	// The first visit carries no answers, so the browser supplies the first
-	// one: the User-Agent names the architecture well enough for a default the
-	// form lets the reader correct.
-	if choice.Architecture == "" {
-		choice.Architecture = images.DetectArchitecture(r.UserAgent())
-	}
+	versions := s.isoVersions(r)
+	input.Stable.Version = versions.Stable
+	input.Oldstable.Version = versions.Oldstable
+	return input
+}
 
-	// A missing or empty iso_versions table degrades to the compiled-in
-	// fallback versions rather than failing the page.
-	var versions images.Versions
-	if rows, err := s.queries.ListISOVersions(r.Context()); err == nil {
-		for _, row := range rows {
-			switch row.Channel {
-			case "stable":
-				versions.Stable = row.Version
-			case "oldstable":
-				versions.Oldstable = row.Version
-			}
+// releaseOf builds a release label out of the suite metadata we own, so that
+// "Debian 13 (trixie), stable" survives trixie ceasing to be stable without an
+// edit to the code.
+func releaseOf(suites []query.Suite, name string) images.Release {
+	for _, suite := range suites {
+		if suite.Name != name || suite.Version == "" || suite.Codename == "" {
+			continue
 		}
-	} else {
+		return images.Release{
+			Label: fmt.Sprintf("Debian %s (%s), %s", suite.Version, suite.Codename, suite.Name),
+		}
+	}
+	return images.Release{}
+}
+
+// releases reads the suite metadata the catalogue labels its groups with. The
+// layout carries a menu rather than the rows, so the pages that need the rows
+// ask for them.
+func (s *Server) releases(r *http.Request) []query.Suite {
+	suites, err := s.queries.ListSuites(r.Context())
+	if err != nil {
+		s.logger.WarnContext(r.Context(), "listing suites failed", slog.Any("error", err))
+		return nil
+	}
+	return suites
+}
+
+// isoSizes is what cdimage served each image at when ingest last looked.
+func (s *Server) isoSizes(r *http.Request) map[string]int64 {
+	rows, err := s.queries.ListISOSizes(r.Context())
+	if err != nil {
+		s.logger.WarnContext(r.Context(), "reading the image sizes failed", slog.Any("error", err))
+		return nil
+	}
+
+	sizes := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		sizes[row.Image] = row.Bytes
+	}
+	return sizes
+}
+
+// desktopVersions is what each live image's desktop ships as, read from our own
+// copy of the archive. An empty result leaves the tiles naming the desktop and
+// nothing else, which is what an unfilled database can honestly say.
+func (s *Server) desktopVersions(r *http.Request) map[string]string {
+	rows, err := s.queries.ListPackageVersions(r.Context(), query.ListPackageVersionsParams{
+		Suite: "stable",
+		Names: images.DesktopPackages(),
+	})
+	if err != nil {
+		s.logger.WarnContext(r.Context(), "reading the desktop versions failed", slog.Any("error", err))
+		return nil
+	}
+
+	versions := make(map[string]string, len(rows))
+	for _, row := range rows {
+		versions[row.Name] = row.Version
+	}
+	return versions
+}
+
+// isoVersions is the point releases ingest last observed on cdimage. A missing
+// or empty table degrades to the compiled-in fallbacks rather than failing the
+// page.
+func (s *Server) isoVersions(r *http.Request) (versions struct{ Stable, Oldstable string }) {
+	rows, err := s.queries.ListISOVersions(r.Context())
+	if err != nil {
 		s.logger.WarnContext(r.Context(), "reading the ISO versions failed", slog.Any("error", err))
+		return versions
 	}
-
-	recommendation := images.Recommend(choice, versions)
-
-	// Recommend fills in the remaining defaults, so the form is redrawn from
-	// what it decided rather than from what arrived. Otherwise a first visit
-	// shows unchecked controls beside a populated answer.
-	if choice.Flavour == "" {
-		choice.Flavour = images.FlavourLive
+	for _, row := range rows {
+		switch row.Channel {
+		case "stable":
+			versions.Stable = row.Version
+		case "oldstable":
+			versions.Oldstable = row.Version
+		}
 	}
-	if choice.Desktop == "" {
-		choice.Desktop = images.DesktopGNOME
-	}
-
-	return choice, recommendation
+	return versions
 }
 
 // handleScreenshot serves a mirrored thumbnail. The bytes come from our own
@@ -599,16 +786,18 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// layout gathers what every page needs: the suite list and the age of the data.
-func (s *Server) layout(r *http.Request, searchQuery string) (layoutData, error) {
+// layout gathers what every page needs: the suite list, the suite being read,
+// and the age of the data.
+func (s *Server) layout(w http.ResponseWriter, r *http.Request, searchQuery string) (layoutData, error) {
 	suites, err := s.queries.ListSuites(r.Context())
 	if err != nil {
 		return layoutData{}, fmt.Errorf("listing suites: %w", err)
 	}
 
+	current := s.suite(w, r, suites)
 	data := layoutData{
-		Suites: suites,
-		Suite:  suiteOrDefault(r.URL.Query().Get("suite")),
+		Suites: suiteChoices(suites, current, searchQuery),
+		Suite:  current,
 		Query:  searchQuery,
 	}
 
@@ -663,6 +852,46 @@ func suiteOrDefault(suite string) string {
 	return suite
 }
 
+// suiteCookie remembers which suite the reader is browsing. The front page
+// carries no parameter to hold it, so without this a reload puts a reader of
+// unstable back into stable. It stores one word chosen from a list we serve,
+// never anything about the reader.
+const suiteCookie = "suite"
+
+// suite is the suite the page is about: the URL says so, otherwise the last
+// choice, otherwise stable. A name that is not a suite we serve is ignored
+// rather than trusted, wherever it came from.
+func (s *Server) suite(w http.ResponseWriter, r *http.Request, suites []query.Suite) string {
+	if chosen := r.URL.Query().Get("suite"); known(suites, chosen) {
+		http.SetCookie(w, &http.Cookie{
+			Name:     suiteCookie,
+			Value:    chosen,
+			Path:     "/",
+			MaxAge:   int((365 * 24 * time.Hour).Seconds()),
+			HttpOnly: true,
+			// Secure unconditionally: the site is served over TLS, and browsers
+			// treat loopback as a secure origin, so development keeps working.
+			Secure:   true,
+			SameSite: http.SameSiteLaxMode,
+		})
+		return chosen
+	}
+
+	if remembered, err := r.Cookie(suiteCookie); err == nil && known(suites, remembered.Value) {
+		return remembered.Value
+	}
+	return suiteOrDefault(r.URL.Query().Get("suite"))
+}
+
+func known(suites []query.Suite, name string) bool {
+	for _, suite := range suites {
+		if suite.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, status int, data any) {
 	tmpl, ok := s.pages[page]
 	if !ok {
@@ -699,7 +928,7 @@ func (s *Server) renderFragment(w http.ResponseWriter, r *http.Request, name str
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request, heading, detail string) {
-	layout, err := s.layout(r, "")
+	layout, err := s.layout(w, r, "")
 	if err != nil {
 		s.serverError(w, r, err)
 		return
