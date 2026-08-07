@@ -382,6 +382,18 @@
         @apply -mx-1 mb-1 block bg-neutral-200 px-1 text-neutral-900;
     }
 
+    /* A Debian version is a string a reader compares against another one
+       character by character, so it is mono wherever it is written: in a table,
+       in a completion, in a sentence. Nothing else is stated. Size, colour and
+       layout belong to whatever names the version, so the same class serves a
+       column of them and one in a line of prose, and the version reads as part
+       of the text around it rather than as a fragment of a different page.
+       Long versions may break anywhere: they carry no spaces, so a cell narrow
+       enough would otherwise be widened by one rather than wrapping it. */
+    .version {
+        @apply font-mono break-words;
+    }
+
     /* The severity mark. A filled one is a claim on the reader's attention, so
        only the severities that make one carry a background. */
     .severity {

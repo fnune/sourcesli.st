@@ -11,7 +11,7 @@
         <a class="menu-row" href="/p/{{.Suite}}/{{.Name}}">
             <span class="flex-none font-mono">{{.Name}}</span>
             {{if .Synopsis}}<span class="truncate text-sm text-ink-subtle">{{.Synopsis}}</span>{{end}}
-            {{if .Version}}<span class="ml-auto flex-none font-mono text-sm text-ink-muted">{{.Version}}</span>{{end}}
+            {{if .Version}}<span class="version ml-auto flex-none text-sm text-ink-muted">{{.Version}}</span>{{end}}
         </a>
     </li>
     {{end}}
