@@ -8,12 +8,16 @@ snapshots := ".dev/snapshots"
 default:
     @just --list
 
-# Start the database and bring the schema up to date. Safe to rerun.
+# Database, schema, and the web server on http://127.0.0.1:8080. Start here.
+[group('run')]
+dev: up && web
+
+# Start the database and bring the schema up to date, without serving. Safe to rerun.
 [group('run')]
 up: && migrate
     nix run .#dev-up
 
-# Run the web server from source. Ctrl-c, edit, rerun.
+# Serve from source against a database that is already up. Ctrl-c, edit, rerun.
 [group('run')]
 web:
     DATABASE_URL='{{ database_url }}' LISTEN_ADDRESS=127.0.0.1:8080 go run ./cmd/web

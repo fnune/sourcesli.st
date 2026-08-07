@@ -44,9 +44,9 @@ mkShell {
 
   shellHook = ''
     echo "sourcesli.st dev shell"
+    echo "  just dev             database, schema, and the site on :8080"
+    echo "  just restore         fill it from the newest local snapshot"
     echo "  just --list          every command in this repository"
-    echo "  just up / just down  start and destroy the environment"
-    echo "  just fmt             format everything"
     echo "  just check           run the full baseline"
   '';
 }

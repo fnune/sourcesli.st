@@ -66,13 +66,16 @@ The shell carries `just`, and the justfile names every command below. `just --li
 The database runs in a container; the web tier runs from source against it, so a code change costs a restart rather than an image build.
 
 ```sh
-just up    # start the database, apply migrations and seed data
-just web   # go run ./cmd/web, on http://127.0.0.1:8080
+just dev
 ```
+
+That starts the database, applies migrations and seed data, and serves on `http://127.0.0.1:8080`. It needs no network and is safe to rerun. Ctrl-c stops the server and leaves the database running, so the edit-and-restart loop is `just web`.
+
+The two halves are separate recipes when you want them: `just up` for the database and schema alone, `just web` to serve against a database that is already up.
 
 The database is published on `127.0.0.1:15432`, an uncommon port so it never loses a race against a system Postgres. It runs in a rootless podman pod on a private network, reachable on the loopback interface only, with state in a named volume.
 
-`just up` is safe to rerun and needs no network. It leaves you with a schema, the suites, and no packages.
+A fresh database has the schema and the suites but no packages, so the site renders empty until you fill it.
 
 ### Data
 
@@ -159,7 +162,7 @@ Both binaries read the environment and refuse to start when anything required is
 | `UDD_CACHE_DIR` | ingest | Where the downloaded dump lives between runs. Losing it is harmless. |
 | `UDD_SCRATCH_DATABASE` | ingest | Database the dump restores into. Dropped and recreated every run. |
 
-The ingest role must be able to create and drop the scratch database, create the `pg_trgm` and `postgres_fdw` extensions, and define a foreign server. Grant exactly that; do not run it as a superuser for convenience.
+The ingest role must be able to create and drop the scratch database, create the `pg_trgm`, `fuzzystrmatch`, and `postgres_fdw` extensions, and define a foreign server. Grant exactly that; do not run it as a superuser for convenience.
 
 Ingest is a job, not a service. Scheduling, retries, and backoff belong to whatever runs it, never faster than upstream publishes.
 
