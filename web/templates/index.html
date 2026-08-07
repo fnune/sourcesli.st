@@ -1,9 +1,186 @@
-{{define "title"}}Search{{end}}
+{{define "title"}}Download Debian{{end}}
 
 {{define "content"}}
-<h1 class="sr-only">Search Debian packages</h1>
-
+{{/*
+  The site answers two questions, and the download is the one a first-time
+  visitor came for, so it is the page. Search sits above it because it is one
+  control, and putting it anywhere else costs a click to reach.
+*/}}
 {{template "searchform" .}}
+
+<h1 class="mt-10 text-2xl font-semibold">Download Debian</h1>
+{{/*
+  Two columns on wide screens with the answer sticky on the right, so changing
+  a card always shows its effect. On small screens the answer comes first.
+*/}}
+<div class="mt-6 gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-start">
+
+<div class="lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1">
+{{template "recommendation" .}}
+</div>
+
+{{/*
+  A plain GET form with radio cards: real action, real method, no submit
+  ceremony. htmx refreshes the answer on every change; without JavaScript the
+  noscript button submits the same form to the same handler.
+*/}}
+<form id="images-form" class="mt-8 lg:col-start-1 lg:row-start-1 lg:mt-0" action="/" method="get"
+      hx-get="/" hx-trigger="change" hx-target="#recommendation"
+      hx-select="#recommendation" hx-swap="outerHTML">
+
+    <fieldset>
+        <legend class="text-sm font-medium">What are you installing on?</legend>
+        <div class="mt-2 grid gap-2 sm:grid-cols-3">
+            <label class="choice">
+                <input class="sr-only" type="radio" name="arch" value="amd64"
+                       {{if eq (printf "%s" .Choice.Architecture) "amd64"}}checked{{end}}>
+                <span class="choice-card">
+                    <span class="font-medium">64-bit PC</span>
+                    <span class="mt-0.5 block text-sm text-ink-muted">Most desktops and laptops, Intel or AMD</span>
+                </span>
+            </label>
+            <label class="choice">
+                <input class="sr-only" type="radio" name="arch" value="arm64"
+                       {{if eq (printf "%s" .Choice.Architecture) "arm64"}}checked{{end}}>
+                <span class="choice-card">
+                    <span class="font-medium">64-bit ARM</span>
+                    <span class="mt-0.5 block text-sm text-ink-muted">Raspberry Pi 4 and later, ARM servers</span>
+                </span>
+            </label>
+            <label class="choice">
+                <input class="sr-only" type="radio" name="arch" value="i386"
+                       {{if eq (printf "%s" .Choice.Architecture) "i386"}}checked{{end}}>
+                <span class="choice-card">
+                    <span class="font-medium">32-bit PC</span>
+                    <span class="mt-0.5 block text-sm text-ink-muted">Hardware from before roughly 2007</span>
+                </span>
+            </label>
+        </div>
+    </fieldset>
+
+    <fieldset class="mt-5">
+        <legend class="text-sm font-medium">How do you want to install?</legend>
+        <div class="mt-2 grid gap-2 sm:grid-cols-3">
+            <label class="choice">
+                <input class="sr-only" type="radio" name="flavour" value="netinst"
+                       {{if eq (printf "%s" .Choice.Flavour) "netinst"}}checked{{end}}>
+                <span class="choice-card">
+                    <span class="font-medium">Install now</span>
+                    <span class="mt-0.5 block text-sm text-ink-muted">Small download. Fetches the rest over the internet.</span>
+                </span>
+            </label>
+            <label class="choice">
+                <input class="sr-only" id="flavour-live" type="radio" name="flavour" value="live"
+                       {{if eq (printf "%s" .Choice.Flavour) "live"}}checked{{end}}>
+                <span class="choice-card">
+                    <span class="font-medium">Try it first</span>
+                    <span class="mt-0.5 block text-sm text-ink-muted">Boots a desktop from USB without touching your disk.</span>
+                </span>
+            </label>
+            <label class="choice">
+                <input class="sr-only" type="radio" name="flavour" value="dvd"
+                       {{if eq (printf "%s" .Choice.Flavour) "dvd"}}checked{{end}}>
+                <span class="choice-card">
+                    <span class="font-medium">Offline install</span>
+                    <span class="mt-0.5 block text-sm text-ink-muted">Everything on one disc. No internet needed.</span>
+                </span>
+            </label>
+        </div>
+    </fieldset>
+
+    <fieldset class="mt-5">
+        <legend class="text-sm font-medium">Which desktop?</legend>
+        <div class="relative mt-2">
+        <div class="desktop-grid grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <label class="choice">
+                <input class="sr-only" type="radio" name="desktop" value="gnome"
+                       {{if eq (printf "%s" .Choice.Desktop) "gnome"}}checked{{end}}>
+                <span class="choice-card overflow-hidden p-0">
+                    <img class="aspect-video w-full object-cover" src="/assets/desktops/gnome.webp" alt="GNOME desktop">
+                    <span class="flex items-baseline justify-between gap-2 px-3 py-2">
+                        <span class="flex-none text-sm font-medium">GNOME</span>
+                        <a class="min-w-0 truncate text-xs text-ink-subtle underline" rel="noopener" href="https://www.gnome.org/">gnome.org</a>
+                    </span>
+                </span>
+            </label>
+            <label class="choice">
+                <input class="sr-only" type="radio" name="desktop" value="kde"
+                       {{if eq (printf "%s" .Choice.Desktop) "kde"}}checked{{end}}>
+                <span class="choice-card overflow-hidden p-0">
+                    <img class="aspect-video w-full object-cover" src="/assets/desktops/kde.webp" alt="KDE Plasma desktop">
+                    <span class="flex items-baseline justify-between gap-2 px-3 py-2">
+                        <span class="flex-none text-sm font-medium">KDE Plasma</span>
+                        <a class="min-w-0 truncate text-xs text-ink-subtle underline" rel="noopener" href="https://kde.org/plasma-desktop/">kde.org</a>
+                    </span>
+                </span>
+            </label>
+            <label class="choice">
+                <input class="sr-only" type="radio" name="desktop" value="xfce"
+                       {{if eq (printf "%s" .Choice.Desktop) "xfce"}}checked{{end}}>
+                <span class="choice-card overflow-hidden p-0">
+                    <img class="aspect-video w-full object-cover" src="/assets/desktops/xfce.webp" alt="Xfce desktop">
+                    <span class="flex items-baseline justify-between gap-2 px-3 py-2">
+                        <span class="flex-none text-sm font-medium">Xfce</span>
+                        <a class="min-w-0 truncate text-xs text-ink-subtle underline" rel="noopener" href="https://xfce.org/">xfce.org</a>
+                    </span>
+                </span>
+            </label>
+            <label class="choice">
+                <input class="sr-only" type="radio" name="desktop" value="cinnamon"
+                       {{if eq (printf "%s" .Choice.Desktop) "cinnamon"}}checked{{end}}>
+                <span class="choice-card overflow-hidden p-0">
+                    <img class="aspect-video w-full object-cover" src="/assets/desktops/cinnamon.webp" alt="Cinnamon desktop">
+                    <span class="flex items-baseline justify-between gap-2 px-3 py-2">
+                        <span class="flex-none text-sm font-medium">Cinnamon</span>
+                        <a class="min-w-0 truncate text-xs text-ink-subtle underline" rel="noopener" href="https://projects.linuxmint.com/cinnamon/">linuxmint.com</a>
+                    </span>
+                </span>
+            </label>
+            <label class="choice">
+                <input class="sr-only" type="radio" name="desktop" value="mate"
+                       {{if eq (printf "%s" .Choice.Desktop) "mate"}}checked{{end}}>
+                <span class="choice-card overflow-hidden p-0">
+                    <img class="aspect-video w-full object-cover" src="/assets/desktops/mate.webp" alt="MATE desktop">
+                    <span class="flex items-baseline justify-between gap-2 px-3 py-2">
+                        <span class="flex-none text-sm font-medium">MATE</span>
+                        <a class="min-w-0 truncate text-xs text-ink-subtle underline" rel="noopener" href="https://mate-desktop.org/">mate-desktop.org</a>
+                    </span>
+                </span>
+            </label>
+            <label class="choice">
+                <input class="sr-only" type="radio" name="desktop" value="standard"
+                       {{if eq (printf "%s" .Choice.Desktop) "standard"}}checked{{end}}>
+                <span class="choice-card overflow-hidden p-0">
+                    <span class="terminal">user@debian:~$ &#9608;</span>
+                    <span class="block px-3 py-2 text-sm font-medium">No desktop</span>
+                </span>
+            </label>
+        </div>
+        <div class="desktop-overlay absolute inset-0 items-start justify-center pt-12">
+            <p class="mx-4 rounded-md border border-line bg-surface px-4 py-3 text-center text-sm text-ink-muted shadow-sm">
+                This image is not tied to a desktop; the installer asks during setup.<br>
+                <label class="cursor-pointer underline" for="flavour-live">Pick one now with "Try it first"</label>
+            </p>
+        </div>
+        </div>
+    </fieldset>
+
+    <noscript>
+        <button class="mt-5 rounded-md bg-accent px-4 py-2 text-on-accent" type="submit">
+            Update the answer
+        </button>
+    </noscript>
+</form>
+
+<p class="mt-8 text-sm text-ink-muted lg:col-start-1 lg:row-start-2">
+    These are released images: point releases of stable, or of oldstable for hardware stable no
+    longer supports. Testing and unstable have no released images. Install stable and change your
+    <span class="font-mono">sources.list</span> afterwards, or take a
+    <a class="underline" href="https://www.debian.org/devel/debian-installer/">weekly build of
+    testing</a> and accept that it is untested.
+</p>
+
+</div>
 
 {{if .Top}}
 <section class="mt-10">

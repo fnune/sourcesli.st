@@ -647,10 +647,25 @@ func TestBugPageOmitsMissingDates(t *testing.T) {
 	}
 }
 
-func TestImageChooserRendersWithoutADatabase(t *testing.T) {
+// The chooser is the front page, and the path it used to live at keeps working
+// for the links already pointing at it.
+func TestTheOldImagesPathRedirectsToTheFrontPage(t *testing.T) {
 	t.Parallel()
 
 	response := get(t, newTestServer(t, populatedQueries()), "/images", nil)
+
+	if response.Code != http.StatusMovedPermanently {
+		t.Fatalf("status = %d, want 301", response.Code)
+	}
+	if got := response.Header().Get("Location"); got != "/" {
+		t.Errorf("redirected to %q, want /", got)
+	}
+}
+
+func TestImageChooserRendersWithoutADatabase(t *testing.T) {
+	t.Parallel()
+
+	response := get(t, newTestServer(t, populatedQueries()), "/", nil)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", response.Code)
@@ -667,7 +682,7 @@ func TestImageChooserReflectsTheAnswers(t *testing.T) {
 	t.Parallel()
 
 	response := get(t, newTestServer(t, populatedQueries()),
-		"/images?arch=amd64&flavour=live&desktop=xfce", nil)
+		"/?arch=amd64&flavour=live&desktop=xfce", nil)
 
 	body := response.Body.String()
 	if !strings.Contains(body, "current-live") {
@@ -689,7 +704,7 @@ func TestImageChooserReflectsTheAnswers(t *testing.T) {
 func TestImageChooserDetectsTheArchitecture(t *testing.T) {
 	t.Parallel()
 
-	response := get(t, newTestServer(t, populatedQueries()), "/images",
+	response := get(t, newTestServer(t, populatedQueries()), "/",
 		map[string]string{"User-Agent": "Mozilla/5.0 (X11; Linux aarch64; rv:141.0) Gecko/20100101"})
 
 	body := response.Body.String()
@@ -706,7 +721,7 @@ func TestImageChooserUsesTheIngestedVersions(t *testing.T) {
 	queries := populatedQueries()
 	queries.isoVersions = []query.ListISOVersionsRow{{Channel: "stable", Version: "13.7.0"}}
 
-	body := get(t, newTestServer(t, queries), "/images", nil).Body.String()
+	body := get(t, newTestServer(t, queries), "/", nil).Body.String()
 
 	if !strings.Contains(body, "debian-live-13.7.0-amd64-gnome.iso") {
 		t.Error("the page should offer the exact file for the ingested version")
@@ -719,7 +734,7 @@ func TestImageChooserUsesTheIngestedVersions(t *testing.T) {
 func TestImageChooserNamesTheRelease(t *testing.T) {
 	t.Parallel()
 
-	body := get(t, newTestServer(t, populatedQueries()), "/images", nil).Body.String()
+	body := get(t, newTestServer(t, populatedQueries()), "/", nil).Body.String()
 
 	if !strings.Contains(body, "Debian 13 (trixie), the stable release") {
 		t.Error("the answer should name the release it recommends")
@@ -735,7 +750,7 @@ func TestImageChooserNamesTheRelease(t *testing.T) {
 func TestDesktopOverlayOffersTheLiveSwitch(t *testing.T) {
 	t.Parallel()
 
-	body := get(t, newTestServer(t, populatedQueries()), "/images?flavour=netinst", nil).Body.String()
+	body := get(t, newTestServer(t, populatedQueries()), "/?flavour=netinst", nil).Body.String()
 
 	if !strings.Contains(body, `for="flavour-live"`) {
 		t.Error("the overlay should offer switching to the live image via a label")
@@ -750,9 +765,9 @@ func TestDesktopOverlayOffersTheLiveSwitch(t *testing.T) {
 func TestImageChooserFormWorksWithoutJavaScript(t *testing.T) {
 	t.Parallel()
 
-	body := get(t, newTestServer(t, populatedQueries()), "/images", nil).Body.String()
+	body := get(t, newTestServer(t, populatedQueries()), "/", nil).Body.String()
 
-	if !strings.Contains(body, `action="/images" method="get"`) {
+	if !strings.Contains(body, `action="/" method="get"`) {
 		t.Error("the chooser must be a real form")
 	}
 	if !strings.Contains(body, "<noscript>") {

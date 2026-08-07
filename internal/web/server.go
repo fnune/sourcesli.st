@@ -85,7 +85,7 @@ func NewServer(queries Queries, templates, assets fs.FS, logger *slog.Logger) (*
 
 	shared := []string{"layout.html", "searchform.html", "results.html", "recommendation.html"}
 	pageNames := []string{
-		"index.html", "search.html", "package.html", "bug.html", "images.html", "message.html",
+		"index.html", "search.html", "package.html", "bug.html", "message.html",
 	}
 
 	pages := make(map[string]*template.Template, len(pageNames))
@@ -120,7 +120,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /complete", s.handleComplete)
 	mux.HandleFunc("GET /p/{suite}/{name}", s.handlePackage)
 	mux.HandleFunc("GET /b/{number}", s.handleBug)
-	mux.HandleFunc("GET /images", s.handleImages)
+	mux.HandleFunc("GET /images", s.handleImagesMoved)
 	mux.HandleFunc("GET /screenshots/{name}", s.handleScreenshot)
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.Handle("GET /assets/", s.assets)
@@ -206,12 +206,6 @@ type bugData struct {
 	Tags []string
 }
 
-type imagesData struct {
-	layoutData
-	Choice         images.Choice
-	Recommendation images.Recommendation
-}
-
 type messageData struct {
 	layoutData
 	Heading string
@@ -220,7 +214,9 @@ type messageData struct {
 
 type indexData struct {
 	layoutData
-	Top []query.ListTopPackagesRow
+	Top            []query.ListTopPackagesRow
+	Choice         images.Choice
+	Recommendation images.Recommendation
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -239,7 +235,20 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.render(w, r, "index.html", http.StatusOK, indexData{layoutData: layout, Top: top})
+	choice, recommendation := s.chooseImage(r)
+
+	s.render(w, r, "index.html", http.StatusOK, indexData{
+		layoutData:     layout,
+		Top:            top,
+		Choice:         choice,
+		Recommendation: recommendation,
+	})
+}
+
+// handleImagesMoved keeps the links that pointed at the chooser working now
+// that it is the front page.
+func (s *Server) handleImagesMoved(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/", http.StatusMovedPermanently)
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
@@ -503,16 +512,10 @@ func (s *Server) handleBug(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "bug.html", http.StatusOK, bugData{layoutData: layout, Bug: bug, Tags: tags})
 }
 
-// handleImages answers the "which image do I want" question. It reads no
-// database and contacts nothing: the recommendation is derived from the answers
-// and Debian's stable directory layout.
-func (s *Server) handleImages(w http.ResponseWriter, r *http.Request) {
-	layout, err := s.layout(r, "")
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-
+// chooseImage answers the "which image do I want" question. It contacts nothing
+// and reads only the observed versions: the recommendation is derived from the
+// answers and Debian's stable directory layout.
+func (s *Server) chooseImage(r *http.Request) (images.Choice, images.Recommendation) {
 	parameters := r.URL.Query()
 	choice := images.Choice{
 		Architecture: images.Architecture(parameters.Get("arch")),
@@ -556,11 +559,7 @@ func (s *Server) handleImages(w http.ResponseWriter, r *http.Request) {
 		choice.Desktop = images.DesktopGNOME
 	}
 
-	s.render(w, r, "images.html", http.StatusOK, imagesData{
-		layoutData:     layout,
-		Choice:         choice,
-		Recommendation: recommendation,
-	})
+	return choice, recommendation
 }
 
 // handleScreenshot serves a mirrored thumbnail. The bytes come from our own

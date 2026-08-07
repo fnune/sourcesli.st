@@ -45,10 +45,10 @@ nix/               package, images, checks, dev environment
 
 ### Pages
 
-- `/` and `/search` search binary and source packages, with htmx autocompletion over a form that works without it.
+- `/` is the ISO chooser, with search above it. The chooser contacts nothing: the recommendation is derived from the answers and Debian's stable directory layout. `/images` redirects here.
+- `/search` searches binary and source packages, with htmx autocompletion over a form that works without it, and offers near names when a query matches nothing.
 - `/p/{suite}/{name}` shows versions per architecture, dependencies, the source package, and bugs filterable by status and severity. Source-only packages get the same page built from their source record.
 - `/b/{number}` shows one bug and links to the BTS for its live state.
-- `/images` is the ISO chooser. It contacts nothing: the recommendation is derived from the answers and Debian's stable directory layout.
 - `/healthz` answers 200 while the database is reachable. An empty database is healthy; an unreachable one is not.
 
 ## Development
