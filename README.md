@@ -2,9 +2,9 @@
 
 Another way to browse Debian packages and bug reports, and to pick the right Debian ISO to download.
 
-Site: [sourcesli.st](https://sourcesli.st). Source: [github.com/fnune/sourcesli.st](https://github.com/fnune/sourcesli.st).
+Source: [github.com/fnune/sourcesli.st](https://github.com/fnune/sourcesli.st). Nothing is deployed yet, so the only way to see it is to [run it locally](CONTRIBUTING.md).
 
-[![The sourcesli.st download page, showing the 64-bit PC live images for Debian 13](docs/download-page.png)](https://sourcesli.st)
+![The sourcesli.st download page, showing the 64-bit PC live images for Debian 13](docs/download-page.png)
 
 ## What you can do with it
 
