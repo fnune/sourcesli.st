@@ -60,6 +60,7 @@ let
         image = "sourceslist-ingest:${version}";
         profiles = [ "manual" ];
         depends_on.database.condition = "service_healthy";
+        userns_mode = "keep-id";
         environment = {
           DATABASE_URL = "postgres://sourceslist:devonly@database:5432/sourceslist";
           UDD_DUMP_URL = "https://udd.debian.org/dumps/udd.dump";
