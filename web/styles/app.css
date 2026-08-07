@@ -416,14 +416,14 @@
         @apply text-severity-wishlist-ink;
     }
 
-    /* What the snapshot knows about a bug is a run of short phrases, and a run
-       of short phrases separated by spaces alone reads as one long sentence.
-       The separator is drawn here rather than written into the template because
-       which phrase comes first depends on what was recorded.
+    /* A run of short phrases separated by spaces alone reads as one long
+       sentence. The separator is drawn here rather than written into the
+       template because which phrase comes first depends on what was recorded,
+       and the last one must not trail one.
        It trails the phrase it follows rather than leading the next one: the
        line wraps between phrases, and a leading separator would then be left
        dangling at the start of the wrapped line. */
-    .bug-facts > *:not(:last-child)::after {
+    .facts > *:not(:last-child)::after {
         content: "·";
         @apply ml-1.5 text-line-strong;
     }

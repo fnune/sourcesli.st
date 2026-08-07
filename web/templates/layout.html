@@ -42,20 +42,29 @@
     {{template "content" .}}
 </main>
 
+{{/*
+  How old the snapshot is is the one thing here a reader might act on, so it
+  leads the row in full ink, and the licences it is published under trail it a
+  size down. The clock time is kept in the element's attributes: it is worth
+  having when a reader goes looking for it, and worth nothing on the page.
+*/}}
 <footer class="border-t border-line bg-surface">
-    <div class="mx-auto max-w-4xl px-4 py-4 text-sm text-ink-subtle">
-        {{if .DataAsOf}}
-            <p>Data from the Ultimate Debian Database, as of
-                <time datetime="{{.DataAsOf.Format "2006-01-02T15:04:05Z07:00"}}">
-                    {{.DataAsOf.Format "2 January 2006, 15:04 MST"}}</time>.</p>
-        {{else}}
-            <p>No data has been loaded yet.</p>
-        {{end}}
-        <p class="mt-1">Derived from public Debian data under its original licences.
+    <div class="mx-auto max-w-4xl px-4 py-5">
+        <div class="facts flex flex-wrap items-baseline gap-x-1.5 gap-y-1 text-sm text-ink-subtle">
+            {{if .DataAsOf}}
+                <p class="text-ink">Updated
+                    <time datetime="{{.DataAsOf.Format "2006-01-02T15:04:05Z07:00"}}"
+                          title="{{.DataAsOf.Format "2 January 2006, 15:04 MST"}}">
+                        {{.DataAsOf.Format "2 January 2006"}}</time></p>
+            {{else}}
+                <p class="text-ink">No data has been loaded yet</p>
+            {{end}}
+            <p><a class="underline" href="https://udd.debian.org/">Ultimate Debian Database</a></p>
+            <p><a class="underline" href="https://github.com/fnune/sourcesli.st">Source</a></p>
+        </div>
+        <p class="mt-2 text-xs text-ink-subtle">Public Debian data under its original licences.
             The <a class="underline" href="https://www.debian.org/logos/">Debian logo</a> is
-            &copy; Software in the Public Interest, Inc., used under CC BY-SA 3.0.
-            Not affiliated with the Debian Project.
-            <a class="underline" href="https://github.com/fnune/sourcesli.st">Source</a>.</p>
+            &copy; SPI, Inc., under CC BY-SA 3.0. Not affiliated with the Debian Project.</p>
     </div>
 </footer>
 
