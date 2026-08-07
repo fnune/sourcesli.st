@@ -226,6 +226,7 @@ ORDER BY suite ASC, (kind = 'binary') DESC;
 SELECT
     name,
     suite,
+    version,
     synopsis,
     votes,
     exists(

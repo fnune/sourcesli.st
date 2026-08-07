@@ -504,6 +504,7 @@ const listTopPackages = `-- name: ListTopPackages :many
 SELECT
     name,
     suite,
+    version,
     synopsis,
     votes,
     exists(
@@ -524,6 +525,7 @@ type ListTopPackagesParams struct {
 type ListTopPackagesRow struct {
 	Name          string
 	Suite         string
+	Version       string
 	Synopsis      string
 	Votes         int32
 	HasScreenshot bool
@@ -545,6 +547,7 @@ func (q *Queries) ListTopPackages(ctx context.Context, arg ListTopPackagesParams
 		if err := rows.Scan(
 			&i.Name,
 			&i.Suite,
+			&i.Version,
 			&i.Synopsis,
 			&i.Votes,
 			&i.HasScreenshot,

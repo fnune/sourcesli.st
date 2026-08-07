@@ -4,7 +4,7 @@
 <section>
     {{if .Query}}
         <h1 class="text-lg font-semibold">
-            {{len .Results}} result{{if ne (len .Results) 1}}s{{end}}
+            {{len .Results.Rows}} result{{if ne (len .Results.Rows) 1}}s{{end}}
             for <span class="font-mono">{{.Query}}</span> in <span class="suite suite-{{.Suite}} ml-1 font-mono"><span class="suite-mark"></span>{{.Suite}}</span>
         </h1>
     {{end}}
@@ -12,12 +12,12 @@
     {{if .MoreN}}
     <p class="mt-2 text-sm">
         <a class="underline" href="/search?q={{.Query}}&suite={{.Suite}}&n={{.MoreN}}">Show more</a>
-        <span class="text-ink-subtle">&middot; showing {{len .Results}}</span>
+        <span class="text-ink-subtle">&middot; showing {{len .Results.Rows}}</span>
     </p>
     {{end}}
     {{if .Truncated}}
     <p class="mt-2 text-sm text-ink-muted">
-        Only the first {{len .Results}} matches are shown. Narrow the query to see the rest.
+        Only the first {{len .Results.Rows}} matches are shown. Narrow the query to see the rest.
     </p>
     {{end}}
 </section>

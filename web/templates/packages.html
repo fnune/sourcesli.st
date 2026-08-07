@@ -1,0 +1,55 @@
+{{/*
+  A list of packages, wherever it was found. Search results, what a failed
+  search offers instead, and the applications on the front page are the same
+  rows: a name to click, what the thing is, and which of it is in this suite.
+  They differ only in what the query knew, and a row writes nothing for what it
+  was not told.
+
+  The whole row is the link rather than the name alone, so the pointer does not
+  have to find the underlined word, and the row says under the pointer which of
+  them is about to be followed.
+*/}}
+{{define "packages"}}
+<ul class="mt-4 divide-y divide-line rounded-md border border-line bg-surface">
+    {{range .Rows}}
+    <li>
+        <a class="package-row" href="/p/{{.Suite}}/{{.Name}}">
+            {{if $.Illustrated}}
+            {{if .Screenshot}}
+            <img class="shot" src="/screenshots/{{.Name}}" alt="" loading="lazy">
+            {{else}}
+            <span class="shot shot-empty" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 17.5 8.5 12l4 4 3-3 5.5 5.5"/>
+                    <circle cx="8" cy="8" r="1.5"/>
+                </svg>
+            </span>
+            {{end}}
+            {{end}}
+
+            <span class="min-w-0">
+                <span class="flex flex-wrap items-baseline gap-x-2">
+                    <span class="font-mono font-medium underline">{{.Name}}</span>
+                    {{if .Kind}}
+                    <span class="rounded border border-line-strong px-1.5 text-xs text-ink-subtle">{{.Kind}}</span>
+                    {{end}}
+                    {{if .Version}}
+                    <span class="version text-sm text-ink-subtle">{{.Version}}</span>
+                    {{end}}
+                </span>
+                {{/*
+                  One line, cut where it does not fit: a list is scanned rather
+                  than read, and a synopsis that wraps makes rows of two
+                  different heights whose padding then reads as uneven. The name
+                  is what was matched, and the whole synopsis is one click away.
+                */}}
+                {{if .Synopsis}}
+                <span class="block truncate text-sm text-ink-subtle">{{.Synopsis}}</span>
+                {{end}}
+            </span>
+        </a>
+    </li>
+    {{end}}
+</ul>
+{{end}}

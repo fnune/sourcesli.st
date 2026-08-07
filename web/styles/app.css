@@ -309,6 +309,22 @@
         width: 0.5rem;
     }
 
+    /* A row in a list of packages. The whole row takes the click, so it states
+       the pointer and the focus the way the link inside it would have: the same
+       fill, and a ring drawn inside the edge, where the browser's own would be
+       clipped by the list into a pair of lines above and below the row. */
+    .package-row {
+        @apply flex items-center gap-3 px-4 py-3 no-underline;
+    }
+
+    .package-row:hover {
+        @apply bg-muted;
+    }
+
+    .package-row:focus-visible {
+        @apply bg-muted outline-none ring-2 ring-ring ring-inset;
+    }
+
     .shot {
         @apply h-10 w-16 flex-none rounded border border-line-strong;
     }

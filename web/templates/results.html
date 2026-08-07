@@ -1,26 +1,10 @@
 {{define "results"}}
-{{if .Results}}
-<ul class="mt-4 divide-y divide-line rounded-md border border-line bg-surface">
-    {{range .Results}}
-    <li class="px-4 py-3">
-        <a class="font-mono font-medium underline" href="/p/{{.Suite}}/{{.Name}}">{{.Name}}</a>
-        <span class="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-ink-muted">{{.Kind}}</span>
-        <span class="version ml-2 text-sm text-ink-subtle">{{.Version}}</span>
-        {{if .Synopsis}}<p class="mt-1 text-ink-muted">{{.Synopsis}}</p>{{end}}
-    </li>
-    {{end}}
-</ul>
+{{if .Results.Rows}}
+{{template "packages" .Results}}
 {{else if .Query}}
-{{if .Suggestions}}
+{{if .Suggestions.Rows}}
 <p class="mt-4 text-ink-muted">Nothing matched. Did you mean:</p>
-<ul class="mt-3 divide-y divide-line rounded-md border border-line bg-surface">
-    {{range .Suggestions}}
-    <li class="px-4 py-3">
-        <a class="font-mono font-medium underline" href="/p/{{.Suite}}/{{.Name}}">{{.Name}}</a>
-        {{if .Synopsis}}<p class="mt-1 text-ink-muted">{{.Synopsis}}</p>{{end}}
-    </li>
-    {{end}}
-</ul>
+{{template "packages" .Suggestions}}
 {{else}}
 <p class="mt-4 text-ink-muted">
     Nothing matched. Try a shorter query, or a different suite.

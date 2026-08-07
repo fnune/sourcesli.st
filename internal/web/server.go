@@ -80,7 +80,9 @@ func NewServer(queries Queries, templates, assets fs.FS, logger *slog.Logger) (*
 	// Every page is parsed with the layout and the shared partials, as its own
 	// template set. Parsing them all into one set is impossible because each
 	// page defines "title" and "content" under the same names.
-	shared := []string{"layout.html", "searchform.html", "results.html", "screen.html"}
+	shared := []string{
+		"layout.html", "searchform.html", "results.html", "packages.html", "screen.html",
+	}
 	pageNames := []string{
 		"index.html", "image.html", "search.html", "package.html", "message.html",
 	}
@@ -182,12 +184,81 @@ func suiteChoices(suites []query.Suite, current, searchQuery string) []suiteChoi
 
 type searchData struct {
 	layoutData
-	Results     []query.SearchPackagesRow
-	Suggestions []query.SuggestSimilarPackagesRow
+	Results     packageList
+	Suggestions packageList
 	// MoreN is the limit the "show more" link asks for, zero when there is
 	// nothing more to ask.
 	MoreN     int
 	Truncated bool
+}
+
+// packageList is a list of packages as a reader meets it: search results, the
+// suggestions offered when a search matched nothing, and the applications on
+// the front page are three queries and one thing to look at. Whether the list
+// is illustrated is a property of the list rather than of a row, because a
+// search that returned forty libraries no screenshot will ever exist for should
+// not draw forty empty frames.
+type packageList struct {
+	Rows        []packageRow
+	Illustrated bool
+}
+
+// packageRow is one entry. A field left empty is a fact this particular list
+// does not carry, and the template writes nothing for it: every application on
+// the front page is a binary package, so labelling each of them as one
+// distinguishes nothing.
+type packageRow struct {
+	Name       string
+	Suite      string
+	Kind       string
+	Version    string
+	Synopsis   string
+	Screenshot bool
+}
+
+// searchResults says which kind each result is because a search is the one
+// place a source package and a binary of the same name both turn up.
+func searchResults(rows []query.SearchPackagesRow) packageList {
+	list := packageList{Rows: make([]packageRow, 0, len(rows))}
+	for _, row := range rows {
+		list.Rows = append(list.Rows, packageRow{
+			Name:     row.Name,
+			Suite:    row.Suite,
+			Kind:     row.Kind,
+			Version:  row.Version,
+			Synopsis: row.Synopsis,
+		})
+	}
+	return list
+}
+
+// suggestionResults is what a failed search offers instead. The query answers
+// one question, did you mean this name, so the row states the name and what it
+// is and nothing else.
+func suggestionResults(rows []query.SuggestSimilarPackagesRow) packageList {
+	list := packageList{Rows: make([]packageRow, 0, len(rows))}
+	for _, row := range rows {
+		list.Rows = append(list.Rows, packageRow{
+			Name:     row.Name,
+			Suite:    row.Suite,
+			Synopsis: row.Synopsis,
+		})
+	}
+	return list
+}
+
+func topApplications(rows []query.ListTopPackagesRow) packageList {
+	list := packageList{Rows: make([]packageRow, 0, len(rows)), Illustrated: true}
+	for _, row := range rows {
+		list.Rows = append(list.Rows, packageRow{
+			Name:       row.Name,
+			Suite:      row.Suite,
+			Version:    row.Version,
+			Synopsis:   row.Synopsis,
+			Screenshot: row.HasScreenshot,
+		})
+	}
+	return list
 }
 
 type dependencySection struct {
@@ -308,7 +379,7 @@ type messageData struct {
 
 type indexData struct {
 	layoutData
-	Top    []query.ListTopPackagesRow
+	Top    packageList
 	Groups []images.Group
 	// Detected is the architecture the User-Agent suggests. Its group is listed
 	// first and says so; it is a guess, so nothing is hidden on the strength of
@@ -341,7 +412,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	s.render(w, r, "index.html", http.StatusOK, indexData{
 		layoutData: layout,
-		Top:        top,
+		Top:        topApplications(top),
 		Groups:     leading(images.Catalogue(s.catalogueInput(r, s.releases(r))), detected),
 		Detected:   detected,
 	})
@@ -414,7 +485,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	data := searchData{
 		layoutData: layout,
-		Results:    results,
+		Results:    searchResults(results),
 		MoreN:      nextLimit(len(results), limit, searchResultMax),
 		Truncated:  len(results) == searchResultMax,
 	}
@@ -432,7 +503,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			s.serverError(w, r, fmt.Errorf("suggesting packages similar to %q: %w", layout.Query, err))
 			return
 		}
-		data.Suggestions = suggestions
+		data.Suggestions = suggestionResults(suggestions)
 	}
 
 	s.render(w, r, "search.html", http.StatusOK, data)
