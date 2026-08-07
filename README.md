@@ -8,7 +8,7 @@ Source: [github.com/fnune/sourcesli.st](https://github.com/fnune/sourcesli.st). 
 
 ## What you can do with it
 
-**Pick an ISO.** Debian publishes many images, and the download pages assume you already know how releases, installers, and media are organised. The image list groups them by hardware and tells you, for each one, what you get and what to check it against: a direct link to the current point release, plus its checksum and signature. This is the part of the site with no good existing alternative, so it gets the most attention.
+**Pick an ISO.** Debian publishes many images, across releases, installer types, desktop environments, and firmware variants. The image list groups them by hardware and tells you, for each one, what you get and what to check it against: a direct link to the current point release, plus its checksum and signature.
 
 **Search packages.** One search box over binary and source packages in every suite we carry. It suggests names as you type, and when a query matches nothing it offers near names instead of an empty page.
 
