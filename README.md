@@ -38,7 +38,7 @@ flowchart LR
     web --> user
 ```
 
-The rule this shape exists to keep: a visit to the site never causes a request to a Debian service. Debian's infrastructure is paid for by volunteers, so our load on it stays the same whether the site gets ten visitors a day or ten million. If the dump has not changed since last time, ingest downloads nothing and rebuilds nothing.
+The rule this shape exists to keep: a visit to the site never causes a request to a Debian service. Debian's hardware and bandwidth are paid for by donations and run by volunteers, so our load on it must not grow with our traffic. If the dump has not changed since last time, ingest downloads nothing and rebuilds nothing.
 
 The trade is that the data is as old as the last dump. We prefer showing slightly stale data over adding load upstream, and the footer on every page says when the data was last updated.
 
