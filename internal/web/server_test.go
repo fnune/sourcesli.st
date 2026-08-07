@@ -68,6 +68,9 @@ func populatedQueries() *fakeQueries {
 		completions: []query.CompletePackageNamesRow{
 			{Name: "bash", Suite: "unstable", Synopsis: "GNU Bourne Again SHell"},
 		},
+		suggestions: []query.SuggestSimilarPackagesRow{
+			{Name: "firefox-esr", Suite: "unstable", Synopsis: "Mozilla Firefox web browser"},
+		},
 		binaries: map[string][]query.GetBinaryPackageRow{
 			"bash": {{
 				Name: "bash", Version: "5.3-3", Architecture: "amd64", Suite: "unstable",
@@ -298,6 +301,41 @@ func TestSearchWithNoQueryGoesBackToTheFrontPage(t *testing.T) {
 
 	if queries.searchCalledWith.Query != "" {
 		t.Error("an empty query should not run a search")
+	}
+}
+
+// Full-text search matches whole words, so a misspelt name matches nothing at
+// all. Trigram similarity over the same names turns that dead end into the
+// package the reader meant.
+func TestSearchSuggestsSimilarNamesWhenNothingMatched(t *testing.T) {
+	t.Parallel()
+
+	queries := populatedQueries()
+	queries.search = nil
+
+	body := get(t, newTestServer(t, queries), "/search?q=faiafox&suite=unstable", nil).Body.String()
+
+	if !strings.Contains(body, "Did you mean") {
+		t.Error("a search with no results should offer what the reader may have meant")
+	}
+	if !strings.Contains(body, `href="/p/unstable/firefox-esr"`) {
+		t.Error("the suggestions should link to the package pages")
+	}
+	if queries.suggestCalledWith.Query != "faiafox" || queries.suggestCalledWith.Suite != "unstable" {
+		t.Errorf("suggestions asked for %+v, want the query and suite from the URL", queries.suggestCalledWith)
+	}
+}
+
+// Suggestions cost a second query, so they are only worth running when the
+// search itself came back empty.
+func TestSearchWithResultsAsksForNoSuggestions(t *testing.T) {
+	t.Parallel()
+
+	queries := populatedQueries()
+	get(t, newTestServer(t, queries), "/search?q=bash&suite=unstable", nil)
+
+	if queries.suggestCalledWith.Query != "" {
+		t.Error("a search that found something should not also ask for suggestions")
 	}
 }
 

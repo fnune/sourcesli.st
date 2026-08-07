@@ -17,6 +17,7 @@ type fakeQueries struct {
 	suites        []query.Suite
 	search        []query.SearchPackagesRow
 	completions   []query.CompletePackageNamesRow
+	suggestions   []query.SuggestSimilarPackagesRow
 	binaries      map[string][]query.GetBinaryPackageRow
 	sources       map[string]query.SourcePackage
 	fresh         map[string]query.GetFreshVersionRow
@@ -34,8 +35,9 @@ type fakeQueries struct {
 	// a database failure becomes a 500 rather than a half-rendered page.
 	failWith error
 
-	searchCalledWith query.SearchPackagesParams
-	bugsCalledWith   query.ListBugsForPackageParams
+	searchCalledWith  query.SearchPackagesParams
+	suggestCalledWith query.SuggestSimilarPackagesParams
+	bugsCalledWith    query.ListBugsForPackageParams
 }
 
 func (f *fakeQueries) ListSuites(context.Context) ([]query.Suite, error) {
@@ -64,6 +66,17 @@ func (f *fakeQueries) CompletePackageNames(
 		return nil, f.failWith
 	}
 	return f.completions, nil
+}
+
+func (f *fakeQueries) SuggestSimilarPackages(
+	_ context.Context,
+	arg query.SuggestSimilarPackagesParams,
+) ([]query.SuggestSimilarPackagesRow, error) {
+	if f.failWith != nil {
+		return nil, f.failWith
+	}
+	f.suggestCalledWith = arg
+	return f.suggestions, nil
 }
 
 func (f *fakeQueries) GetBinaryPackage(

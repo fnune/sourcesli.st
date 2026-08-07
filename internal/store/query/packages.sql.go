@@ -552,3 +552,96 @@ func (q *Queries) SearchPackages(ctx context.Context, arg SearchPackagesParams) 
 	}
 	return items, nil
 }
+
+const suggestSimilarPackages = `-- name: SuggestSimilarPackages :many
+WITH input AS (
+    SELECT
+        $2::text AS query,
+        least(3, greatest(1, ceil(length($2::text) / 3.0)))::int
+            AS max_distance
+),
+
+candidates AS (
+    SELECT DISTINCT ON (split_part(package_search.name, '-', 1))
+        package_search.name,
+        package_search.suite,
+        package_search.synopsis,
+        package_search.popularity,
+        least(
+            levenshtein_less_equal(package_search.name, input.query, input.max_distance),
+            levenshtein_less_equal(
+                split_part(package_search.name, '-', 1), input.query, input.max_distance
+            )
+        ) AS distance
+    FROM package_search, input
+    WHERE
+        package_search.suite = $3
+        AND package_search.kind = 'binary'
+        AND least(
+            levenshtein_less_equal(package_search.name, input.query, input.max_distance),
+            levenshtein_less_equal(
+                split_part(package_search.name, '-', 1), input.query, input.max_distance
+            )
+        ) <= input.max_distance
+    -- Within a family the plainest name is the one the reader meant: ` + "`" + `gimp` + "`" + `
+    -- rather than ` + "`" + `gimp-data` + "`" + `, which popcon counts just as often.
+    ORDER BY
+        split_part(package_search.name, '-', 1),
+        distance ASC,
+        length(package_search.name) ASC,
+        popularity DESC
+)
+
+SELECT
+    name,
+    suite,
+    synopsis
+FROM candidates
+ORDER BY distance ASC, popularity DESC, name ASC
+LIMIT $1
+`
+
+type SuggestSimilarPackagesParams struct {
+	MaxResults int32
+	Query      string
+	Suite      string
+}
+
+type SuggestSimilarPackagesRow struct {
+	Name     string
+	Suite    string
+	Synopsis string
+}
+
+// What to offer a reader whose search matched nothing. Full-text search matches
+// whole words, so a misspelt name matches nothing at all; edit distance finds
+// what they meant. Trigram similarity does not: a typo in the middle of a short
+// name shares too few trigrams with it.
+//
+// The distance is measured against the name and against its leading word, so
+// `faiafox` reaches `firefox-esr`, and the allowance grows with the length of
+// the query because two wrong letters in four is not a typo. Names are collapsed
+// to one per leading word, or a package with thirty translation packages fills
+// the list on its own.
+//
+// This is the one query here no index serves, and it stays acceptable because
+// it runs only when a search returned nothing at all.
+func (q *Queries) SuggestSimilarPackages(ctx context.Context, arg SuggestSimilarPackagesParams) ([]SuggestSimilarPackagesRow, error) {
+	rows, err := q.db.Query(ctx, suggestSimilarPackages, arg.MaxResults, arg.Query, arg.Suite)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SuggestSimilarPackagesRow{}
+	for rows.Next() {
+		var i SuggestSimilarPackagesRow
+		if err := rows.Scan(&i.Name, &i.Suite, &i.Synopsis); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

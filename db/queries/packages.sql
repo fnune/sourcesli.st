@@ -54,6 +54,66 @@ ORDER BY
     name ASC
 LIMIT sqlc.arg(max_results);
 
+-- name: SuggestSimilarPackages :many
+-- What to offer a reader whose search matched nothing. Full-text search matches
+-- whole words, so a misspelt name matches nothing at all; edit distance finds
+-- what they meant. Trigram similarity does not: a typo in the middle of a short
+-- name shares too few trigrams with it.
+--
+-- The distance is measured against the name and against its leading word, so
+-- `faiafox` reaches `firefox-esr`, and the allowance grows with the length of
+-- the query because two wrong letters in four is not a typo. Names are collapsed
+-- to one per leading word, or a package with thirty translation packages fills
+-- the list on its own.
+--
+-- This is the one query here no index serves, and it stays acceptable because
+-- it runs only when a search returned nothing at all.
+WITH input AS (
+    SELECT
+        sqlc.arg(query)::text AS query,
+        least(3, greatest(1, ceil(length(sqlc.arg(query)::text) / 3.0)))::int
+            AS max_distance
+),
+
+candidates AS (
+    SELECT DISTINCT ON (split_part(package_search.name, '-', 1))
+        package_search.name,
+        package_search.suite,
+        package_search.synopsis,
+        package_search.popularity,
+        least(
+            levenshtein_less_equal(package_search.name, input.query, input.max_distance),
+            levenshtein_less_equal(
+                split_part(package_search.name, '-', 1), input.query, input.max_distance
+            )
+        ) AS distance
+    FROM package_search, input
+    WHERE
+        package_search.suite = sqlc.arg(suite)
+        AND package_search.kind = 'binary'
+        AND least(
+            levenshtein_less_equal(package_search.name, input.query, input.max_distance),
+            levenshtein_less_equal(
+                split_part(package_search.name, '-', 1), input.query, input.max_distance
+            )
+        ) <= input.max_distance
+    -- Within a family the plainest name is the one the reader meant: `gimp`
+    -- rather than `gimp-data`, which popcon counts just as often.
+    ORDER BY
+        split_part(package_search.name, '-', 1),
+        distance ASC,
+        length(package_search.name) ASC,
+        popularity DESC
+)
+
+SELECT
+    name,
+    suite,
+    synopsis
+FROM candidates
+ORDER BY distance ASC, popularity DESC, name ASC
+LIMIT sqlc.arg(max_results);
+
 -- name: GetBinaryPackage :many
 -- Every architecture and version of one binary package in one suite.
 SELECT

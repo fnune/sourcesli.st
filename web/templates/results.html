@@ -11,8 +11,20 @@
     {{end}}
 </ul>
 {{else if .Query}}
+{{if .Suggestions}}
+<p class="mt-4 text-ink-muted">Nothing matched. Did you mean:</p>
+<ul class="mt-3 divide-y divide-line rounded-md border border-line bg-surface">
+    {{range .Suggestions}}
+    <li class="px-4 py-3">
+        <a class="font-mono font-medium underline" href="/p/{{.Suite}}/{{.Name}}">{{.Name}}</a>
+        {{if .Synopsis}}<p class="mt-1 text-ink-muted">{{.Synopsis}}</p>{{end}}
+    </li>
+    {{end}}
+</ul>
+{{else}}
 <p class="mt-4 text-ink-muted">
     Nothing matched. Try a shorter query, or a different suite.
 </p>
+{{end}}
 {{end}}
 {{end}}

@@ -55,6 +55,20 @@ type Querier interface {
 	// row keeps a reader from seeing the same name twice with no way to tell why;
 	// the binary wins because that is the page a search result links to.
 	SearchPackages(ctx context.Context, arg SearchPackagesParams) ([]SearchPackagesRow, error)
+	// What to offer a reader whose search matched nothing. Full-text search matches
+	// whole words, so a misspelt name matches nothing at all; edit distance finds
+	// what they meant. Trigram similarity does not: a typo in the middle of a short
+	// name shares too few trigrams with it.
+	//
+	// The distance is measured against the name and against its leading word, so
+	// `faiafox` reaches `firefox-esr`, and the allowance grows with the length of
+	// the query because two wrong letters in four is not a typo. Names are collapsed
+	// to one per leading word, or a package with thirty translation packages fills
+	// the list on its own.
+	//
+	// This is the one query here no index serves, and it stays acceptable because
+	// it runs only when a search returned nothing at all.
+	SuggestSimilarPackages(ctx context.Context, arg SuggestSimilarPackagesParams) ([]SuggestSimilarPackagesRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

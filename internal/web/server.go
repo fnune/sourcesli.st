@@ -25,6 +25,7 @@ const (
 	searchResultLimit = 50
 	searchResultMax   = 250
 	completionLimit   = 8
+	suggestionLimit   = 5
 	bugListLimit      = 25
 	bugListMax        = 200
 	pageStep          = 50
@@ -41,6 +42,10 @@ type Queries interface {
 		ctx context.Context,
 		arg query.CompletePackageNamesParams,
 	) ([]query.CompletePackageNamesRow, error)
+	SuggestSimilarPackages(
+		ctx context.Context,
+		arg query.SuggestSimilarPackagesParams,
+	) ([]query.SuggestSimilarPackagesRow, error)
 	GetBinaryPackage(ctx context.Context, arg query.GetBinaryPackageParams) ([]query.GetBinaryPackageRow, error)
 	GetSourcePackage(ctx context.Context, arg query.GetSourcePackageParams) (query.SourcePackage, error)
 	GetFreshVersion(ctx context.Context, arg query.GetFreshVersionParams) (query.GetFreshVersionRow, error)
@@ -131,7 +136,8 @@ type layoutData struct {
 
 type searchData struct {
 	layoutData
-	Results []query.SearchPackagesRow
+	Results     []query.SearchPackagesRow
+	Suggestions []query.SuggestSimilarPackagesRow
 	// MoreN is the limit the "show more" link asks for, zero when there is
 	// nothing more to ask.
 	MoreN     int
@@ -237,14 +243,13 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	// An empty query has nothing to say beyond what the front page already
+	// says, and a results page with no query in it reads as a failure.
 	layout, err := s.layout(r, r.URL.Query().Get("q"))
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-
-	// An empty query has nothing to say beyond what the front page already
-	// says, and a results page with no query in it reads as a failure.
 	if strings.TrimSpace(layout.Query) == "" {
 		http.Redirect(w, r, indexFor(layout.Suites, layout.Suite), http.StatusSeeOther)
 		return
@@ -261,12 +266,30 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.render(w, r, "search.html", http.StatusOK, searchData{
+	data := searchData{
 		layoutData: layout,
 		Results:    results,
 		MoreN:      nextLimit(len(results), limit, searchResultMax),
 		Truncated:  len(results) == searchResultMax,
-	})
+	}
+
+	// Full-text search matches whole words, so a misspelt name matches nothing
+	// at all. Trigram similarity over the same names turns that dead end into
+	// the package the reader meant.
+	if len(results) == 0 {
+		suggestions, err := s.queries.SuggestSimilarPackages(r.Context(), query.SuggestSimilarPackagesParams{
+			Suite:      layout.Suite,
+			Query:      layout.Query,
+			MaxResults: suggestionLimit,
+		})
+		if err != nil {
+			s.serverError(w, r, fmt.Errorf("suggesting packages similar to %q: %w", layout.Query, err))
+			return
+		}
+		data.Suggestions = suggestions
+	}
+
+	s.render(w, r, "search.html", http.StatusOK, data)
 }
 
 // indexFor keeps the reader's suite when a search sends them back to the front
