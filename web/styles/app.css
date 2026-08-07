@@ -221,6 +221,23 @@
         @apply outline-none ring-2 ring-ring;
     }
 
+    /* A row in a menu: the completions and the suite picker are the same thing
+       twice. The browser's own focus ring is drawn outside the element, where a
+       menu clips it into a pair of lines above and below the row, so the row
+       states its own focus instead: the same fill as the pointer gives it, and a
+       ring drawn inside the edge. */
+    .menu-row {
+        @apply flex items-baseline gap-2 px-3 py-2 no-underline;
+    }
+
+    .menu-row:hover {
+        @apply bg-muted;
+    }
+
+    .menu-row:focus-visible {
+        @apply bg-muted text-ink outline-none ring-2 ring-ring ring-inset;
+    }
+
     /* Completions belong to the field: they are shown while it has the focus,
        or while the pointer is over them on its way to one, and they are gone the
        moment attention is elsewhere. Hiding them in CSS rather than fetching an
@@ -312,6 +329,29 @@
 
     .screen-installer {
         @apply bg-[#0f2b46] p-2 text-neutral-100;
+    }
+
+    /* Each desktop averaged down to one pixel, so a tile whose screenshot has
+       not arrived is already the right kind of light or dark and settles into
+       the picture rather than flashing under it. */
+    .screen-gnome {
+        background-color: #c8d1d9;
+    }
+
+    .screen-kde {
+        background-color: #6e3e50;
+    }
+
+    .screen-xfce {
+        background-color: #538595;
+    }
+
+    .screen-cinnamon {
+        background-color: #2a4351;
+    }
+
+    .screen-mate {
+        background-color: #345d74;
     }
 
     /* The dialog is transcribed at the size it fits, and clipped where it does

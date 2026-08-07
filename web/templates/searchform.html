@@ -46,7 +46,7 @@
         <ul class="suite-menu" aria-label="Switch suite">
             {{range .Suites}}
             <li>
-                <a class="suite suite-{{.Name}} flex items-baseline gap-2 px-3 py-2 no-underline hover:bg-muted focus-visible:bg-muted"
+                <a class="menu-row suite suite-{{.Name}}"
                    href="{{.URL}}" {{if .Current}}aria-current="page"{{end}}>
                     <span class="font-mono text-sm">
                         <span class="suite-mark" aria-hidden="true"></span>{{.Name}}</span>

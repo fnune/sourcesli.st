@@ -10,8 +10,8 @@
   every desktop is on it and why only the installer's own defaults are ticked.
 */}}
 {{if .Screen.Screenshot}}
-<img class="aspect-video w-full object-cover" src="/assets/desktops/{{.Screen}}.webp"
-     alt="{{.Title}}" loading="lazy">
+<img class="screen screen-{{.Screen}} object-cover" src="/assets/desktops/{{.Screen}}.webp"
+     alt="{{.Title}}" loading="lazy" width="640" height="360">
 {{else if eq (printf "%s" .Screen) "installer"}}
 <span class="screen screen-installer" aria-hidden="true">
     <span class="screen-dialog">

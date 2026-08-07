@@ -8,8 +8,7 @@
 <ul class="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-line-strong bg-surface shadow-lg">
     {{range .}}
     <li>
-        <a class="flex items-baseline gap-2 px-3 py-2 no-underline hover:bg-muted"
-           href="/p/{{.Suite}}/{{.Name}}">
+        <a class="menu-row" href="/p/{{.Suite}}/{{.Name}}">
             <span class="flex-none font-mono">{{.Name}}</span>
             {{if .Synopsis}}<span class="truncate text-sm text-ink-subtle">{{.Synopsis}}</span>{{end}}
         </a>
