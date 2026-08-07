@@ -1,6 +1,6 @@
 # Engineering principles
 
-Rules that bind the whole repository. [REQUIREMENTS.md](../REQUIREMENTS.md) says what the product does; this file says how we build it.
+Rules that bind the whole repository. [README.md](../README.md) says what the product does; this file says how we build it.
 
 ---
 

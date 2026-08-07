@@ -51,8 +51,6 @@ The trade is that the data is as old as the last dump. We prefer showing slightl
 - No package downloads and no mirroring of the archive. Metadata only.
 - Debian only, no derivatives.
 
-[REQUIREMENTS.md](REQUIREMENTS.md) is the full specification.
-
 ## Contributing
 
 [CONTRIBUTING.md](CONTRIBUTING.md) covers the architecture, how to run the site locally, and how it is built and deployed. [engineering/README.md](engineering/README.md) has the principles and conventions this repository holds itself to. Read that one first.

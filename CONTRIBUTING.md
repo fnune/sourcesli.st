@@ -1,6 +1,6 @@
 # Contributing
 
-How to build, run, test, and deploy `sourcesli.st`. [README.md](README.md) says what the site is for, [REQUIREMENTS.md](REQUIREMENTS.md) is the specification, and [engineering/README.md](engineering/README.md) holds the principles, the strictness rules, the dependency budget, and the commit conventions this repository holds itself to. Read that one first.
+How to build, run, test, and deploy `sourcesli.st`. [README.md](README.md) says what the site is for, and [engineering/README.md](engineering/README.md) holds the principles, the strictness rules, the dependency budget, and the commit conventions this repository holds itself to. Read that one first.
 
 ## Architecture
 
