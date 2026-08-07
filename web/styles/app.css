@@ -117,6 +117,15 @@
         @apply ring-2 ring-ring;
     }
 
+    /* One grid for the whole page: a wide column and a fixed answer column.
+       Everything that spans the page sits on it, so the search field, the
+       choices under it, and the answer beside them share two edges instead of
+       each ending wherever its own layout put it. */
+    .page-grid {
+        @apply gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]
+        lg:items-start;
+    }
+
     /* Stands in for the desktop screenshots on the "no desktop" card. It
        depicts a terminal, so it is black under either scheme. */
     .terminal {

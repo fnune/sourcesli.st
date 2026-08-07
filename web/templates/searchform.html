@@ -4,12 +4,16 @@
   htmx is layered on the input alone, fetching autocompletion from /complete;
   without JavaScript the form still submits to /search for a full page of
   results.
+
+  It is laid out on the page grid rather than as a row of its own, so the field
+  ends where the column below it ends and the suite starts where the column
+  beside it starts.
 */}}
-<form class="mt-6" action="/search" method="get" role="search">
-    <div class="flex flex-wrap gap-2">
+<form class="page-grid mt-6" action="/search" method="get" role="search">
+    <div class="lg:col-start-1 lg:row-start-1">
         <label class="sr-only" for="q">Package name or description</label>
         <input
-            class="field flex-1 min-w-64"
+            class="field"
             type="search"
             id="q"
             name="q"
@@ -23,13 +27,17 @@
             hx-include="[name='suite']"
             hx-sync="this:replace">
 
+        <div id="completions" class="relative"></div>
+    </div>
+
+    <div class="mt-2 flex gap-2 lg:col-start-2 lg:row-start-1 lg:mt-0">
         <label class="sr-only" for="suite">Suite</label>
         {{/*
           Without autocomplete="off" Firefox restores whatever suite was last
           picked when the page is reloaded, so the page says stable and the
           control says something else.
         */}}
-        <select class="field w-auto" id="suite" name="suite" autocomplete="off">
+        <select class="field min-w-0 flex-1" id="suite" name="suite" autocomplete="off">
             {{range .Suites}}
             <option value="{{.Name}}" {{if eq .Name $.Suite}}selected{{end}}>
                 {{.Name}}{{if .Codename}} ({{.Codename}}){{end}}
@@ -37,9 +45,7 @@
             {{end}}
         </select>
 
-        <button class="rounded-md bg-accent px-4 py-2 text-on-accent" type="submit">Search</button>
+        <button class="flex-none rounded-md bg-accent px-4 py-2 text-on-accent" type="submit">Search</button>
     </div>
-
-    <div id="completions" class="relative"></div>
 </form>
 {{end}}
