@@ -49,17 +49,18 @@
         {{/*
           Fixed layout: with the default, every column is measured from its
           contents, so the same table jumps about as the version strings differ
-          between suites. Four equal columns are wider than three of them need
-          and stay put, which is worth more in a table a reader compares across
-          suites.
+          between suites. Three of the four columns hold a word or a number and
+          are given the width that word needs; the version is the only one that
+          runs long, so it takes whatever is left rather than wrapping beside
+          three columns of empty space.
         */}}
         <table class="w-full table-fixed border-collapse text-sm">
             <thead>
                 <tr class="border-b border-line-strong text-left">
-                    <th class="py-2 pr-4 font-medium">Architecture</th>
+                    <th class="w-28 py-2 pr-4 font-medium">Architecture</th>
                     <th class="py-2 pr-4 font-medium">Version</th>
-                    <th class="py-2 pr-4 font-medium">Section</th>
-                    <th class="py-2 pr-4 font-medium">Installed size</th>
+                    <th class="w-24 py-2 pr-4 font-medium">Section</th>
+                    <th class="w-32 py-2 pr-4 font-medium">Installed size</th>
                 </tr>
             </thead>
             <tbody>
@@ -68,7 +69,7 @@
                     <td class="py-2 pr-4 font-mono">{{.Architecture}}</td>
                     <td class="version py-2 pr-4">{{.Version}}</td>
                     <td class="py-2 pr-4">{{.Section}}</td>
-                    <td class="py-2 pr-4">{{if .InstalledSize}}{{.InstalledSize}} kB{{else}}&mdash;{{end}}</td>
+                    <td class="py-2 pr-4 tabular-nums">{{if .InstalledSize}}{{thousands .InstalledSize}} kB{{else}}&mdash;{{end}}</td>
                 </tr>
                 {{end}}
             </tbody>
@@ -202,7 +203,7 @@
                       tracking system is the only place to click through to.
                     */}}
                     {{if .HasDetail}}
-                    <span class="facts mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-subtle">
+                    <span class="facts mt-1 text-xs text-ink-subtle">
                         {{if .Status}}
                         <span {{if .Done}}class="text-success-ink"{{end}}>{{.Status}}</span>
                         {{else if .Done}}<span class="text-success-ink">closed</span>{{end}}
@@ -219,8 +220,8 @@
                         <span title="{{.Forwarded}}">forwarded to {{.ForwardedTo}}</span>
                         {{end}}
                         {{if .Tags}}
-                        <span class="flex flex-wrap gap-1">
-                            {{range .Tags}}<span class="rounded bg-muted px-1 font-mono">{{.}}</span>{{end}}
+                        <span class="flex flex-wrap gap-x-1 gap-y-1.5">
+                            {{range .Tags}}<span class="tag font-mono">{{.}}</span>{{end}}
                         </span>
                         {{end}}
                     </span>

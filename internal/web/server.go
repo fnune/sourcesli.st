@@ -99,6 +99,7 @@ func NewServer(queries Queries, templates, assets fs.FS, logger *slog.Logger) (*
 		// time: nothing a request carries reaches this.
 		//nolint:gosec // G203: the stylesheet is not input.
 		"stylesheet": func() template.CSS { return template.CSS(stylesheet) },
+		"thousands":  thousands,
 	}
 
 	pages := make(map[string]*template.Template, len(pageNames))
@@ -902,6 +903,33 @@ func preferredArchitecture(binaries []query.GetBinaryPackageRow) string {
 		}
 	}
 	return binaries[0].Architecture
+}
+
+// thousands groups a number the way it is read aloud, so a column of sizes can
+// be compared by length rather than by counting digits. The site is written in
+// English and in no other language, so the separator is a comma and there is
+// nothing to negotiate with the request. A nil size renders as nothing: the
+// template decides what stands in for a size the archive does not carry.
+func thousands(n *int64) string {
+	if n == nil {
+		return ""
+	}
+
+	digits := strconv.FormatInt(*n, 10)
+	sign := ""
+	if strings.HasPrefix(digits, "-") {
+		sign, digits = "-", digits[1:]
+	}
+
+	var grouped strings.Builder
+	for i, digit := range digits {
+		if i > 0 && (len(digits)-i)%3 == 0 {
+			grouped.WriteByte(',')
+		}
+		grouped.WriteRune(digit)
+	}
+
+	return sign + grouped.String()
 }
 
 // bugFilter reads the bug list filters from the URL. Anything unrecognised
