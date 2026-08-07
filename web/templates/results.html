@@ -1,17 +1,17 @@
 {{define "results"}}
 {{if .Results}}
-<ul class="mt-4 divide-y divide-neutral-200 rounded-md border border-neutral-200 bg-white">
+<ul class="mt-4 divide-y divide-line rounded-md border border-line bg-surface">
     {{range .Results}}
     <li class="px-4 py-3">
         <a class="font-mono font-medium underline" href="/p/{{.Suite}}/{{.Name}}">{{.Name}}</a>
-        <span class="ml-2 rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600">{{.Kind}}</span>
-        <span class="ml-2 text-sm text-neutral-500">{{.Version}}</span>
-        {{if .Synopsis}}<p class="mt-1 text-neutral-700">{{.Synopsis}}</p>{{end}}
+        <span class="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-ink-muted">{{.Kind}}</span>
+        <span class="ml-2 text-sm text-ink-subtle">{{.Version}}</span>
+        {{if .Synopsis}}<p class="mt-1 text-ink-muted">{{.Synopsis}}</p>{{end}}
     </li>
     {{end}}
 </ul>
 {{else if .Query}}
-<p class="mt-4 text-neutral-600">
+<p class="mt-4 text-ink-muted">
     Nothing matched. Try a shorter query, or a different suite.
 </p>
 {{end}}

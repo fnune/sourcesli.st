@@ -1,11 +1,11 @@
 {{define "complete"}}
 {{if .}}
-<ul class="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-neutral-300 bg-white shadow-lg">
+<ul class="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-line-strong bg-surface shadow-lg">
     {{range .}}
     <li>
-        <a class="block px-3 py-2 hover:bg-neutral-100" href="/p/{{.Suite}}/{{.Name}}">
+        <a class="block px-3 py-2 hover:bg-muted" href="/p/{{.Suite}}/{{.Name}}">
             <span class="font-mono">{{.Name}}</span>
-            {{if .Synopsis}}<span class="ml-2 text-sm text-neutral-500">{{.Synopsis}}</span>{{end}}
+            {{if .Synopsis}}<span class="ml-2 text-sm text-ink-subtle">{{.Synopsis}}</span>{{end}}
         </a>
     </li>
     {{end}}

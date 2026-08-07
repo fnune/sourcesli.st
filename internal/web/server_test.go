@@ -342,7 +342,7 @@ func TestPackagePageMarksReleaseCriticalBugs(t *testing.T) {
 
 	response := get(t, newTestServer(t, populatedQueries()), "/p/unstable/bash", nil)
 
-	if !strings.Contains(response.Body.String(), "bg-red-100") {
+	if !strings.Contains(response.Body.String(), "bg-danger") {
 		t.Error("a grave bug should be marked as release critical")
 	}
 }
@@ -735,6 +735,41 @@ func TestAssetsAreServed(t *testing.T) {
 		if response.Body.Len() == 0 {
 			t.Errorf("%s served an empty body", asset)
 		}
+	}
+}
+
+// A page reads in whichever scheme the reader's system asks for, and both sets
+// of values live in the stylesheet. A shade named in a template is therefore a
+// hole in the dark scheme, which is why the templates name roles instead.
+func TestColoursAreSemanticAndCoverBothSchemes(t *testing.T) {
+	t.Parallel()
+
+	shade := regexp.MustCompile(`\b(?:bg|text|border|divide|ring)-(?:neutral|slate|gray|zinc|stone|red|orange|amber|yellow|green|blue)-\d{2,3}\b`)
+
+	templates, err := fs.Sub(sourceslist.Web, "web/templates")
+	if err != nil {
+		t.Fatalf("reading templates: %v", err)
+	}
+	entries, err := fs.ReadDir(templates, ".")
+	if err != nil {
+		t.Fatalf("listing templates: %v", err)
+	}
+	for _, entry := range entries {
+		content, err := fs.ReadFile(templates, entry.Name())
+		if err != nil {
+			t.Fatalf("reading %s: %v", entry.Name(), err)
+		}
+		if found := shade.FindString(string(content)); found != "" {
+			t.Errorf("%s names the shade %q; use a role such as bg-surface or text-ink-muted", entry.Name(), found)
+		}
+	}
+
+	stylesheet, err := fs.ReadFile(sourceslist.Web, "web/assets/app.css")
+	if err != nil {
+		t.Fatalf("reading the stylesheet: %v", err)
+	}
+	if !strings.Contains(string(stylesheet), "prefers-color-scheme") {
+		t.Error("the stylesheet carries no dark scheme")
 	}
 }
 

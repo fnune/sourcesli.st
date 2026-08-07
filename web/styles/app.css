@@ -5,6 +5,9 @@
    tailwind.config.js and no npm. */
 @source "../templates";
 
+/* Templates name roles, never shades: `bg-surface`, not `bg-white`. One palette
+   lives here, so the dark scheme below is the same page with different values
+   rather than a second set of classes on every element. */
 @theme {
     --font-sans:
         ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
@@ -12,6 +15,67 @@
     --font-mono:
         ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas,
         monospace;
+
+    --color-canvas: #fafafa;
+    --color-surface: #ffffff;
+    --color-muted: #f5f5f5;
+
+    --color-line: #e5e5e5;
+    --color-line-strong: #d4d4d4;
+    --color-ring: #a3a3a3;
+
+    --color-ink: #171717;
+    --color-ink-muted: #404040;
+    --color-ink-subtle: #737373;
+
+    --color-accent: #171717;
+    --color-on-accent: #ffffff;
+
+    --color-danger: #fee2e2;
+    --color-danger-ink: #991b1b;
+    --color-success: #dcfce7;
+    --color-success-ink: #166534;
+    --color-notice: #fffbeb;
+    --color-notice-line: #fde68a;
+    --color-notice-ink: #78350f;
+}
+
+/* Following the system preference, with no toggle: a switch would need
+   JavaScript, a cookie, and a server that varies its output, which is three
+   moving parts for a decision the operating system already made. */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --color-canvas: #0a0a0a;
+        --color-surface: #171717;
+        --color-muted: #262626;
+
+        --color-line: #2e2e2e;
+        --color-line-strong: #454545;
+        --color-ring: #737373;
+
+        --color-ink: #ededed;
+        --color-ink-muted: #b4b4b4;
+        --color-ink-subtle: #8a8a8a;
+
+        --color-accent: #ededed;
+        --color-on-accent: #171717;
+
+        --color-danger: #3f1414;
+        --color-danger-ink: #fca5a5;
+        --color-success: #0d2a17;
+        --color-success-ink: #86efac;
+        --color-notice: #2b1d05;
+        --color-notice-line: #5a3d0a;
+        --color-notice-ink: #fcd34d;
+    }
+}
+
+@layer base {
+    /* Scrollbars, the search field's clear button, and the suite dropdown are
+       drawn by the browser, and only this makes them follow the page. */
+    :root {
+        color-scheme: light dark;
+    }
 }
 
 /* The search field keeps its own focus ring rather than inheriting the browser
@@ -19,12 +83,12 @@
    one control. */
 @layer components {
     .field {
-        @apply w-full rounded-md border border-neutral-300 bg-white px-3 py-2
-        text-neutral-900 outline-none;
+        @apply w-full rounded-md border border-line-strong bg-surface px-3 py-2
+        text-ink outline-none;
     }
 
     .field:focus {
-        @apply border-neutral-500 ring-2 ring-neutral-200;
+        @apply border-accent ring-2 ring-ring;
     }
 
     /* Radio cards: the input is visually hidden but stays focusable, so the
@@ -34,23 +98,30 @@
     }
 
     .choice-card {
-        @apply block h-full rounded-md border border-neutral-300 bg-white px-3
+        @apply block h-full rounded-md border border-line-strong bg-surface px-3
         py-2;
     }
 
     .choice-pill {
-        @apply block rounded-full border border-neutral-300 bg-white px-3
+        @apply block rounded-full border border-line-strong bg-surface px-3
         py-1.5 text-sm;
     }
 
     .choice input:checked + .choice-card,
     .choice input:checked + .choice-pill {
-        @apply border-neutral-900 ring-1 ring-neutral-900;
+        @apply border-accent ring-1 ring-accent;
     }
 
     .choice input:focus-visible + .choice-card,
     .choice input:focus-visible + .choice-pill {
-        @apply ring-2 ring-neutral-400;
+        @apply ring-2 ring-ring;
+    }
+
+    /* Stands in for the desktop screenshots on the "no desktop" card. It
+       depicts a terminal, so it is black under either scheme. */
+    .terminal {
+        @apply flex aspect-video w-full items-center bg-neutral-900 px-3
+        font-mono text-sm text-neutral-100;
     }
 
     /* Non-live images carry no desktop, so the desktop cards grey out and an

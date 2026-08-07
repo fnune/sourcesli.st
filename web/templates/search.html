@@ -14,11 +14,11 @@
     {{if .MoreN}}
     <p class="mt-2 text-sm">
         <a class="underline" href="/search?q={{.Query}}&suite={{.Suite}}&n={{.MoreN}}">Show more</a>
-        <span class="text-neutral-500">&middot; showing {{len .Results}}</span>
+        <span class="text-ink-subtle">&middot; showing {{len .Results}}</span>
     </p>
     {{end}}
     {{if .Truncated}}
-    <p class="mt-2 text-sm text-neutral-600">
+    <p class="mt-2 text-sm text-ink-muted">
         Only the first {{len .Results}} matches are shown. Narrow the query to see the rest.
     </p>
     {{end}}

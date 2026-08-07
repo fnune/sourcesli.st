@@ -1,15 +1,15 @@
 {{define "recommendation"}}
-<section id="recommendation" class="rounded-lg border border-neutral-200 bg-white p-6">
-    <p class="text-sm text-neutral-500">{{.Recommendation.Release}}</p>
+<section id="recommendation" class="rounded-lg border border-line bg-surface p-6">
+    <p class="text-sm text-ink-subtle">{{.Recommendation.Release}}</p>
     <h2 class="mt-1 text-xl font-semibold">{{.Recommendation.Title}}</h2>
     {{if .Recommendation.Note}}
-    <p class="mt-2 text-sm text-neutral-600">{{.Recommendation.Note}}</p>
+    <p class="mt-2 text-sm text-ink-muted">{{.Recommendation.Note}}</p>
     {{end}}
 
-    <a class="mt-4 inline-block rounded-md bg-neutral-900 px-5 py-2.5 text-white no-underline"
+    <a class="mt-4 inline-block rounded-md bg-accent px-5 py-2.5 text-on-accent no-underline"
        href="{{.Recommendation.DownloadURL}}">Download Debian {{.Recommendation.Version}}</a>
 
-    <ul class="mt-4 list-disc space-y-1 pl-5 text-sm text-neutral-700">
+    <ul class="mt-4 list-disc space-y-1 pl-5 text-sm text-ink-muted">
         <li>{{.Recommendation.Size}}</li>
         <li>
             {{if .Recommendation.NeedsNetwork}}
@@ -19,19 +19,19 @@
             {{end}}
         </li>
         <li><a class="underline" href="https://www.debian.org/releases/stable/installmanual">Installation guide</a></li>
-        <li class="break-all font-mono text-xs text-neutral-500">{{.Recommendation.Filename}}</li>
+        <li class="break-all font-mono text-xs text-ink-subtle">{{.Recommendation.Filename}}</li>
     </ul>
 
-    <details class="mt-5 border-t border-neutral-200 pt-4">
+    <details class="mt-5 border-t border-line pt-4">
         <summary class="cursor-pointer text-sm font-medium">Verify the download</summary>
-        <p class="mt-2 text-sm text-neutral-600">
+        <p class="mt-2 text-sm text-ink-muted">
             Put <a class="underline" href="{{.Recommendation.ChecksumURL}}">SHA512SUMS</a> and
             <a class="underline" href="{{.Recommendation.SignatureURL}}">SHA512SUMS.sign</a>
             beside the image, then:
         </p>
-        <pre class="mt-2 overflow-x-auto rounded bg-neutral-100 p-3 font-mono text-xs">gpg --verify SHA512SUMS.sign SHA512SUMS
+        <pre class="mt-2 overflow-x-auto rounded bg-muted p-3 font-mono text-xs">gpg --verify SHA512SUMS.sign SHA512SUMS
 {{.Recommendation.VerifyCommand}}</pre>
-        <p class="mt-2 text-sm text-neutral-600">
+        <p class="mt-2 text-sm text-ink-muted">
             All files live in <a class="underline" href="{{.Recommendation.DirectoryURL}}">this directory</a>.
         </p>
     </details>

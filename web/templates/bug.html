@@ -1,31 +1,31 @@
 {{define "title"}}#{{.Bug.Number}}{{end}}
 
 {{define "content"}}
-<nav class="text-sm text-neutral-500"><a class="underline" href="/">Search</a> / bug</nav>
+<nav class="text-sm text-ink-subtle"><a class="underline" href="/">Search</a> / bug</nav>
 
 <h1 class="mt-2 text-2xl font-semibold">
     <span class="font-mono">#{{.Bug.Number}}</span>
-    {{if .Bug.Archived}}<span class="ml-2 rounded bg-neutral-200 px-2 py-0.5 text-sm">archived</span>{{end}}
-    {{if .Bug.Done}}<span class="ml-2 rounded bg-green-100 px-2 py-0.5 text-sm text-green-800">closed</span>{{end}}
+    {{if .Bug.Archived}}<span class="ml-2 rounded bg-muted px-2 py-0.5 text-sm">archived</span>{{end}}
+    {{if .Bug.Done}}<span class="ml-2 rounded bg-success px-2 py-0.5 text-sm text-success-ink">closed</span>{{end}}
 </h1>
 <p class="mt-2 text-lg">{{.Bug.Title}}</p>
 
 <dl class="mt-6 grid gap-x-4 gap-y-1 sm:grid-cols-[10rem_1fr]">
-    <dt class="text-neutral-500">Severity</dt><dd>{{.Bug.Severity}}</dd>
-    <dt class="text-neutral-500">Status</dt><dd>{{.Bug.Status}}</dd>
+    <dt class="text-ink-subtle">Severity</dt><dd>{{.Bug.Severity}}</dd>
+    <dt class="text-ink-subtle">Status</dt><dd>{{.Bug.Status}}</dd>
     {{if .Bug.Package}}
-    <dt class="text-neutral-500">Package</dt>
+    <dt class="text-ink-subtle">Package</dt>
     <dd><a class="font-mono underline" href="/p/{{.Suite}}/{{.Bug.Package}}">{{.Bug.Package}}</a></dd>
     {{end}}
-    {{if .Bug.Source}}<dt class="text-neutral-500">Source</dt><dd class="font-mono">{{.Bug.Source}}</dd>{{end}}
-    {{if .Bug.SubmitterName}}<dt class="text-neutral-500">Submitter</dt><dd>{{.Bug.SubmitterName}}</dd>{{end}}
-    {{if .Bug.Forwarded}}<dt class="text-neutral-500">Forwarded</dt><dd>{{.Bug.Forwarded}}</dd>{{end}}
+    {{if .Bug.Source}}<dt class="text-ink-subtle">Source</dt><dd class="font-mono">{{.Bug.Source}}</dd>{{end}}
+    {{if .Bug.SubmitterName}}<dt class="text-ink-subtle">Submitter</dt><dd>{{.Bug.SubmitterName}}</dd>{{end}}
+    {{if .Bug.Forwarded}}<dt class="text-ink-subtle">Forwarded</dt><dd>{{.Bug.Forwarded}}</dd>{{end}}
     {{if not (isZeroTime .Bug.Arrival)}}
-    <dt class="text-neutral-500">Reported</dt>
+    <dt class="text-ink-subtle">Reported</dt>
     <dd><time datetime="{{.Bug.Arrival.Format "2006-01-02"}}">{{.Bug.Arrival.Format "2 January 2006"}}</time></dd>
     {{end}}
     {{if not (isZeroTime .Bug.LastModified)}}
-    <dt class="text-neutral-500">Last modified</dt>
+    <dt class="text-ink-subtle">Last modified</dt>
     <dd><time datetime="{{.Bug.LastModified.Format "2006-01-02"}}">{{.Bug.LastModified.Format "2 January 2006"}}</time></dd>
     {{end}}
 </dl>
@@ -35,13 +35,13 @@
     <h2 class="text-lg font-semibold">Tags</h2>
     <ul class="mt-2 flex flex-wrap gap-2">
         {{range .Tags}}
-        <li class="rounded bg-neutral-100 px-2 py-0.5 font-mono text-sm">{{.}}</li>
+        <li class="rounded bg-muted px-2 py-0.5 font-mono text-sm">{{.}}</li>
         {{end}}
     </ul>
 </section>
 {{end}}
 
-<p class="mt-8 rounded-md border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700">
+<p class="mt-8 rounded-md border border-line bg-surface px-4 py-3 text-sm text-ink-muted">
     This is a snapshot. The message log and the current state live in the
     <a class="underline" href="https://bugs.debian.org/{{.Bug.Number}}">Debian bug tracking system</a>.
 </p>
