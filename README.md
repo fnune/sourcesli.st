@@ -4,6 +4,8 @@ Another way to browse Debian packages and bug reports, and to pick the right Deb
 
 Site: [sourcesli.st](https://sourcesli.st). Source: [github.com/fnune/sourcesli.st](https://github.com/fnune/sourcesli.st).
 
+[![The sourcesli.st download page, showing the 64-bit PC live images for Debian 13](docs/download-page.png)](https://sourcesli.st)
+
 ## What you can do with it
 
 **Pick an ISO.** Debian publishes many images, and the download pages assume you already know how releases, installers, and media are organised. The image list groups them by hardware and tells you, for each one, what you get and what to check it against: a direct link to the current point release, plus its checksum and signature. This is the part of the site with no good existing alternative, so it gets the most attention.
