@@ -21,7 +21,7 @@
 */}}
 <body class="flex min-h-full flex-col bg-canvas text-ink font-sans" hx-boost="true">
 
-<header class="border-b border-line bg-surface">
+<header>
     {{/* One measure through the row: the gap between the controls is the space
          above and below them. */}}
     <div class="mx-auto flex max-w-4xl flex-wrap items-center gap-3 px-4 py-3">
@@ -46,7 +46,7 @@
   The clock time is kept in the element's attributes: worth having when a reader
   goes looking for it, and worth nothing on the page.
 */}}
-<footer class="border-t border-line bg-surface">
+<footer>
     <div class="mx-auto max-w-4xl px-4 py-8">
         <p class="text-ink-muted">
             {{if .DataAsOf}}
