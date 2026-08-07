@@ -134,6 +134,14 @@
         lg:items-start;
     }
 
+    /* Each question opens with a legend and a gap before its cards. The answer
+       has no question to state, so it takes that same height as a margin and
+       starts level with the first row of choices, computed from the tokens the
+       legend itself uses rather than from a number that would drift from it. */
+    .answer-column {
+        @apply lg:mt-[calc(var(--text-sm)*var(--text-sm--line-height)+var(--spacing)*2)];
+    }
+
     /* Stands in for the desktop screenshots on the "no desktop" card. It
        depicts a terminal, so it is black under either scheme. */
     .terminal {
