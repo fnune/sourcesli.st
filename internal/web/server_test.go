@@ -222,6 +222,19 @@ func TestFooterStatesWhenTheDataIsFrom(t *testing.T) {
 	}
 }
 
+func TestEveryPageFooterLinksDebiansDonationPage(t *testing.T) {
+	t.Parallel()
+
+	server := newTestServer(t, populatedQueries())
+
+	for _, path := range []string{"/", "/p/stable/firefox-esr", "/search?q=firefox"} {
+		body := get(t, server, path, nil).Body.String()
+		if !strings.Contains(body, "https://www.debian.org/donations") {
+			t.Errorf("%s does not link to Debian's donation page", path)
+		}
+	}
+}
+
 // An empty database must say so rather than presenting a site with no packages
 // as though it were current.
 func TestFooterSaysSoWhenNothingHasBeenIngested(t *testing.T) {

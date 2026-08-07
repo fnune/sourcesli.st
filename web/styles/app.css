@@ -53,6 +53,11 @@
     --color-severity-important: #fef3c7;
     --color-severity-important-ink: #92400e;
     --color-severity-wishlist-ink: #1d4ed8;
+
+    /* The swirl's own red, and deliberately without a dark override below: the
+       swirl is a fixed fill in both schemes, and two Debian reds a paragraph
+       apart read as one of them being wrong. */
+    --color-heart: #a80030;
 }
 
 /* Following the system preference, with no toggle: a switch would need
@@ -177,6 +182,11 @@
         @apply ml-1 inline-block h-[0.75em] w-[0.75em] flex-none text-ink-subtle;
         /* Sits on the baseline otherwise, which puts it a whole letter too high. */
         vertical-align: -0.08em;
+    }
+
+    .heart {
+        @apply mr-1 inline-block h-[0.9em] w-[0.9em] flex-none text-heart;
+        vertical-align: -0.12em;
     }
 
     /* Which suite a page is about is a fact the reader has to hold while
@@ -423,6 +433,14 @@
        enough would otherwise be widened by one rather than wrapping it. */
     .version {
         @apply font-mono break-words;
+    }
+
+    /* A word set beside the thing it labels: what kind a package is, which
+       releases a bug was filed against. Drawn as an outline rather than a fill
+       because these sit inside rows that fill on hover, where a filled label
+       would disappear into the row under it. */
+    .tag {
+        @apply rounded border border-line-strong px-1.5 text-xs text-ink-subtle;
     }
 
     /* The severity mark. A filled one is a claim on the reader's attention, so

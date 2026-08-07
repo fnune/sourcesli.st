@@ -1,0 +1,12 @@
+{{/*
+  Set at the end of the paragraphs that already say where all of this came from,
+  rather than given a banner of its own.
+*/}}
+{{define "donate"}}<svg class="heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    {{/* Filled, where every other icon here is stroked: at the size of a letter
+         an outline closes up into a blot and the notch goes first. Both flanks
+         are one set of numbers mirrored about x=12. */}}
+    <path d="M12 21C9 18.8 2.4 14.8 2.4 9.2 2.4 5.6 5 3 8.4 3 10.8 3 11.6 5 12 7.6
+             12.4 5 13.2 3 15.6 3 19 3 21.6 5.6 21.6 9.2 21.6 14.8 15 18.8 12 21Z"/>
+</svg>Debian's hardware and bandwidth are paid for by
+<a class="underline" href="https://www.debian.org/donations">donations{{template "outbound"}}</a>.{{end}}
