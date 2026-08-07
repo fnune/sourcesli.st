@@ -20,7 +20,7 @@ let
           POSTGRES_PASSWORD = "devonly";
           POSTGRES_DB = "sourceslist";
         };
-        volumes = [ "pgdata:/var/lib/postgresql/data" ];
+        volumes = [ "pgdata:/var/lib/postgresql" ];
         # Published on loopback only. The development environment must not be
         # reachable from anything but this machine.
         ports = [ "127.0.0.1:5432:5432" ];
