@@ -282,6 +282,68 @@ func TestLoadUnquotesSubmitterNames(t *testing.T) {
 	}
 }
 
+// Bug titles and submitter names reach UDD with their encoding already read
+// wrong once, so the transform reads it back. What it leaves alone matters as
+// much: a name that is merely accented, and a title beside a script the wrong
+// reading has no room for, both have to come through as they went in.
+func TestLoadRepairsUpstreamEncodingDamage(t *testing.T) {
+	pool := requireDatabase(t)
+	migrateFresh(t, pool)
+	seedUpstream(t, pool)
+
+	// Written as escapes, because which bytes these strings hold is the whole
+	// of what is under test, and an editor that helpfully re-encoded one of
+	// them would leave a test that passes for the wrong reason.
+	const (
+		damagedName  = "Martin-\u00c3\u0089ric Racine"
+		damagedTitle = "bash: fails on \u00e2\u0080\u0098set\u00e2\u0080\u0099"
+
+		intactName     = "Martin-\u00c9ric Racine"
+		unfixableTitle = "\u30d0\u30b0: Fr\u00c3\u00a9d\u00c3\u00a9ric"
+	)
+
+	if _, err := pool.Exec(
+		t.Context(),
+		`INSERT INTO udd_raw.bugs
+			(id, package, source, arrival, status, severity, title, last_modified, submitter_name)
+		 VALUES
+			(4, 'bash', 'bash', '2026-06-01 00:00:00', 'pending', 'normal', $1,
+			 '2026-06-01 00:00:00', $2),
+			(5, 'bash', 'bash', '2026-06-02 00:00:00', 'pending', 'normal', $3,
+			 '2026-06-02 00:00:00', $4)`,
+		damagedTitle, damagedName, unfixableTitle, intactName,
+	); err != nil {
+		t.Fatalf("seeding the bugs: %v", err)
+	}
+
+	if _, err := newLoader(t, pool).Load(t.Context()); err != nil {
+		t.Fatalf("loading: %v", err)
+	}
+
+	for _, want := range []struct {
+		number      int
+		title, name string
+		what        string
+	}{
+		{4, "bash: fails on \u2018set\u2019", intactName, "read back"},
+		{5, unfixableTitle, intactName, "left as it came"},
+	} {
+		var title, name string
+		if err := pool.QueryRow(
+			t.Context(),
+			`SELECT title, submitter_name FROM bugs WHERE number = $1`, want.number,
+		).Scan(&title, &name); err != nil {
+			t.Fatalf("reading bug %d: %v", want.number, err)
+		}
+		if title != want.title {
+			t.Errorf("bug %d title = %q, want it %s: %q", want.number, title, want.what, want.title)
+		}
+		if name != want.name {
+			t.Errorf("bug %d submitter = %q, want it %s: %q", want.number, name, want.what, want.name)
+		}
+	}
+}
+
 // UDD stores naive timestamps holding UTC. Without the explicit AT TIME ZONE
 // the value shifts by the server's offset, which is invisible unless asserted.
 func TestLoadInterpretsUpstreamTimestampsAsUTC(t *testing.T) {

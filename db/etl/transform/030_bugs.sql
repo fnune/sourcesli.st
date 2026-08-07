@@ -31,14 +31,17 @@ SELECT
     b.id,
     coalesce(b.package, ''),
     coalesce(b.source, ''),
-    coalesce(b.title, ''),
+    -- Titles and names carry whatever the reporter's mail client sent, and
+    -- reach us with the encoding read wrong somewhere upstream. See the
+    -- function for what it does and what it leaves alone.
+    repair_mojibake(coalesce(b.title, '')),
     coalesce(b.severity, ''),
     coalesce(b.status, ''),
     -- The submitter's name reaches UDD as the display name of a mail address,
     -- so a name holding a comma or a full stop arrives wrapped in the quotes
     -- that made it one token: "ISHIKAWA,chiaki". The quotes belong to the
     -- address, not to the person.
-    btrim(coalesce(b.submitter_name, ''), '"'),
+    repair_mojibake(btrim(coalesce(b.submitter_name, ''), '"')),
     coalesce(b.owner, ''),
     coalesce(b.forwarded, ''),
     -- UDD stores these as `timestamp without time zone` holding UTC. Assigning
