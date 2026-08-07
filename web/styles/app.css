@@ -120,8 +120,8 @@
     /* Stands in for the desktop screenshots on the "no desktop" card. It
        depicts a terminal, so it is black under either scheme. */
     .terminal {
-        @apply flex aspect-video w-full items-center bg-neutral-900 px-3
-        font-mono text-sm text-neutral-100;
+        @apply flex aspect-video w-full items-start whitespace-nowrap
+        bg-neutral-900 px-3 py-2 font-mono text-xs text-neutral-100;
     }
 
     /* Non-live images carry no desktop, so the desktop cards grey out and an
