@@ -165,59 +165,68 @@
           list as a column. Sizing them to their content would step the titles
           in and out by a digit.
         */}}
-        <li class="flex items-baseline gap-x-3 px-3 py-2 hover:bg-muted">
-            <span class="w-20 flex-none font-mono text-ink-subtle">#{{.Number}}</span>
+        <li>
             {{/*
-              The mark sits in the column but is not the column: a background
-              stretched to the width of the longest severity would read as a bar
-              chart of nothing. A severity the BTS does not define gets the bare
-              mark, which is the one case the palette has no colour for.
+              The whole row is the link, as in a list of packages: two lists
+              that are drawn alike answer the pointer alike, and the pointer
+              does not have to find the title among the columns beside it. The
+              columns line up on the baseline of the first line rather than the
+              middle of a row whose height the detail under the title sets.
             */}}
-            <span class="w-20 flex-none text-xs">
-                <span class="severity{{with .SeverityKey}} severity-{{.}}{{end}}">{{.Severity}}</span>
-            </span>
-            <div class="min-w-0 flex-1">
+            <a class="row-link items-baseline" href="https://bugs.debian.org/{{.Number}}"
+               rel="nofollow noopener">
+                <span class="w-20 flex-none font-mono text-ink-subtle">#{{.Number}}</span>
                 {{/*
-                  The mark for a link that leaves the site belongs against the
-                  end of the title it belongs to, not out at the edge of the row
-                  with the width of the title between them.
+                  The mark sits in the column but is not the column: a background
+                  stretched to the width of the longest severity would read as a bar
+                  chart of nothing. A severity the BTS does not define gets the bare
+                  mark, which is the one case the palette has no colour for.
                 */}}
-                <a class="flex max-w-full items-center no-underline hover:underline"
-                   href="https://bugs.debian.org/{{.Number}}" rel="nofollow noopener">
-                    <span class="min-w-0 truncate" title="{{.Title}}">{{.Title}}</span>
-                    {{template "outbound"}}
-                    <span class="sr-only">on bugs.debian.org</span>
-                </a>
-                {{/*
-                  Everything else the snapshot holds, under the title: this list
-                  is the whole of what the site says about a bug, and the
-                  tracking system is the only place to click through to.
-                */}}
-                {{if .HasDetail}}
-                <p class="facts mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-subtle">
-                    {{if .Status}}
-                    <span {{if .Done}}class="text-success-ink"{{end}}>{{.Status}}</span>
-                    {{else if .Done}}<span class="text-success-ink">closed</span>{{end}}
-                    {{if .Package}}<span>against <span class="font-mono">{{.Package}}</span></span>{{end}}
-                    {{if .Source}}<span>source <span class="font-mono">{{.Source}}</span></span>{{end}}
-                    {{if .SubmitterName}}<span>by {{.SubmitterName}}</span>{{end}}
-                    {{if .Reported.Text}}
-                    <span>reported <time datetime="{{.Reported.Machine}}">{{.Reported.Text}}</time></span>
-                    {{end}}
-                    {{if .LastModified.Text}}
-                    <span>updated <time datetime="{{.LastModified.Machine}}">{{.LastModified.Text}}</time></span>
-                    {{end}}
-                    {{if .Forwarded}}
-                    <span title="{{.Forwarded}}">forwarded to {{.ForwardedTo}}</span>
-                    {{end}}
-                    {{if .Tags}}
-                    <span class="flex flex-wrap gap-1">
-                        {{range .Tags}}<span class="rounded bg-muted px-1 font-mono">{{.}}</span>{{end}}
+                <span class="w-20 flex-none text-xs">
+                    <span class="severity{{with .SeverityKey}} severity-{{.}}{{end}}">{{.Severity}}</span>
+                </span>
+                <span class="min-w-0 flex-1">
+                    {{/*
+                      The mark for a link that leaves the site belongs against the
+                      end of the title it belongs to, not out at the edge of the row
+                      with the width of the title between them.
+                    */}}
+                    <span class="flex max-w-full items-center">
+                        <span class="min-w-0 truncate underline" title="{{.Title}}">{{.Title}}</span>
+                        {{template "outbound"}}
+                        <span class="sr-only">on bugs.debian.org</span>
+                    </span>
+                    {{/*
+                      Everything else the snapshot holds, under the title: this list
+                      is the whole of what the site says about a bug, and the
+                      tracking system is the only place to click through to.
+                    */}}
+                    {{if .HasDetail}}
+                    <span class="facts mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-subtle">
+                        {{if .Status}}
+                        <span {{if .Done}}class="text-success-ink"{{end}}>{{.Status}}</span>
+                        {{else if .Done}}<span class="text-success-ink">closed</span>{{end}}
+                        {{if .Package}}<span>against <span class="font-mono">{{.Package}}</span></span>{{end}}
+                        {{if .Source}}<span>source <span class="font-mono">{{.Source}}</span></span>{{end}}
+                        {{if .SubmitterName}}<span>by {{.SubmitterName}}</span>{{end}}
+                        {{if .Reported.Text}}
+                        <span>reported <time datetime="{{.Reported.Machine}}">{{.Reported.Text}}</time></span>
+                        {{end}}
+                        {{if .LastModified.Text}}
+                        <span>updated <time datetime="{{.LastModified.Machine}}">{{.LastModified.Text}}</time></span>
+                        {{end}}
+                        {{if .Forwarded}}
+                        <span title="{{.Forwarded}}">forwarded to {{.ForwardedTo}}</span>
+                        {{end}}
+                        {{if .Tags}}
+                        <span class="flex flex-wrap gap-1">
+                            {{range .Tags}}<span class="rounded bg-muted px-1 font-mono">{{.}}</span>{{end}}
+                        </span>
+                        {{end}}
                     </span>
                     {{end}}
-                </p>
-                {{end}}
-            </div>
+                </span>
+            </a>
         </li>
         {{end}}
     </ul>

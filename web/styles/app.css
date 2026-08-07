@@ -321,19 +321,22 @@
         width: 0.5rem;
     }
 
-    /* A row in a list of packages. The whole row takes the click, so it states
-       the pointer and the focus the way the link inside it would have: the same
-       fill, and a ring drawn inside the edge, where the browser's own would be
-       clipped by the list into a pair of lines above and below the row. */
-    .package-row {
+    /* A row in a list that is a list of links: packages, bugs, whatever else
+       the site lists. The whole row takes the click, so it states the pointer
+       and the focus the way the link inside it would have: the same fill, and a
+       ring drawn inside the edge, where the browser's own would be clipped by
+       the list into a pair of lines above and below the row. One rule for all
+       of them, so two lists that look alike cannot answer the pointer
+       differently. */
+    .row-link {
         @apply flex items-center gap-3 px-4 py-3 no-underline;
     }
 
-    .package-row:hover {
+    .row-link:hover {
         @apply bg-muted;
     }
 
-    .package-row:focus-visible {
+    .row-link:focus-visible {
         @apply bg-muted outline-none ring-2 ring-ring ring-inset;
     }
 

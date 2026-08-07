@@ -13,7 +13,7 @@
 <ul class="mt-4 divide-y divide-line rounded-md border border-line bg-surface">
     {{range .Rows}}
     <li>
-        <a class="package-row" href="/p/{{.Suite}}/{{.Name}}">
+        <a class="row-link" href="/p/{{.Suite}}/{{.Name}}">
             {{if $.Illustrated}}
             {{if .Screenshot}}
             <img class="shot" src="/screenshots/{{.Name}}" alt="" loading="lazy">
