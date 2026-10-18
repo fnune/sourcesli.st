@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
-	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -21,6 +21,16 @@ const (
 	// of kilobytes; anything larger is not the file we asked for.
 	screenshotMaxBytes = 256 * 1024
 )
+
+// screenshotTypes are the raster formats a thumbnail may arrive in. The site
+// serves the stored bytes under their stored type from its own origin, so an
+// SVG, which can carry script, would turn anyone who uploads a screenshot
+// into an author of the site.
+var screenshotTypes = map[string]bool{
+	"image/png":  true,
+	"image/jpeg": true,
+	"image/webp": true,
+}
 
 // SyncScreenshots mirrors thumbnails for the most used applications, so the
 // site can show them without a visitor request ever reaching
@@ -125,9 +135,10 @@ func fetchScreenshot(
 		return nil, "", fmt.Errorf("%s answered %s", url, response.Status)
 	}
 
-	contentType := response.Header.Get("Content-Type")
-	if !strings.HasPrefix(contentType, "image/") {
-		return nil, "", fmt.Errorf("%s served %q, not an image", url, contentType)
+	served := response.Header.Get("Content-Type")
+	contentType, _, err := mime.ParseMediaType(served)
+	if err != nil || !screenshotTypes[contentType] {
+		return nil, "", fmt.Errorf("%s served %q, not a PNG, JPEG, or WebP image", url, served)
 	}
 
 	image, err := io.ReadAll(io.LimitReader(response.Body, screenshotMaxBytes+1))
