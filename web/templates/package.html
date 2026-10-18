@@ -53,9 +53,13 @@
           are given the width that word needs; the version is the only one that
           runs long, so it takes whatever is left rather than wrapping beside
           three columns of empty space.
+          On a phone those three widths are the whole screen, so each row stacks
+          instead: architecture, section and size on one line, and the version
+          under them at full width. The values say what they are without the
+          header row.
         */}}
-        <table class="w-full table-fixed border-collapse text-sm">
-            <thead>
+        <table class="w-full border-collapse text-sm max-sm:block sm:table-fixed">
+            <thead class="max-sm:sr-only">
                 <tr class="border-b border-line-strong text-left">
                     <th class="w-28 py-2 pr-4 font-medium">Architecture</th>
                     <th class="py-2 pr-4 font-medium">Version</th>
@@ -63,13 +67,13 @@
                     <th class="w-32 py-2 pr-4 font-medium">Installed size</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody class="max-sm:block">
                 {{range .Binaries}}
-                <tr class="border-b border-line">
-                    <td class="py-2 pr-4 font-mono">{{.Architecture}}</td>
-                    <td class="version py-2 pr-4">{{.Version}}</td>
-                    <td class="py-2 pr-4">{{.Section}}</td>
-                    <td class="py-2 pr-4 tabular-nums">{{if .InstalledSize}}{{thousands .InstalledSize}} kB{{else}}&mdash;{{end}}</td>
+                <tr class="border-b border-line max-sm:grid max-sm:grid-cols-[auto_1fr_auto] max-sm:gap-x-3 max-sm:gap-y-0.5 max-sm:py-2">
+                    <td class="py-2 pr-4 font-mono max-sm:p-0">{{.Architecture}}</td>
+                    <td class="version py-2 pr-4 max-sm:order-last max-sm:col-span-3 max-sm:p-0 max-sm:text-ink-muted">{{.Version}}</td>
+                    <td class="py-2 pr-4 max-sm:p-0 max-sm:text-ink-subtle">{{.Section}}</td>
+                    <td class="py-2 pr-4 tabular-nums max-sm:p-0">{{if .InstalledSize}}{{thousands .InstalledSize}} kB{{else}}&mdash;{{end}}</td>
                 </tr>
                 {{end}}
             </tbody>
@@ -173,8 +177,10 @@
               does not have to find the title among the columns beside it. The
               columns line up on the baseline of the first line rather than the
               middle of a row whose height the detail under the title sets.
+              On a phone the two narrow columns leave the title a few letters,
+              so it wraps onto a line of its own under them.
             */}}
-            <a class="row-link items-baseline" href="https://bugs.debian.org/{{.Number}}"
+            <a class="row-link items-baseline max-sm:flex-wrap max-sm:gap-y-1" href="https://bugs.debian.org/{{.Number}}"
                rel="nofollow noopener">
                 <span class="w-20 flex-none font-mono text-ink-subtle">#{{.Number}}</span>
                 {{/*
@@ -186,7 +192,7 @@
                 <span class="w-20 flex-none text-xs">
                     <span class="severity{{with .SeverityKey}} severity-{{.}}{{end}}">{{.Severity}}</span>
                 </span>
-                <span class="min-w-0 flex-1">
+                <span class="min-w-0 flex-1 max-sm:basis-full">
                     {{/*
                       The mark for a link that leaves the site belongs against the
                       end of the title it belongs to, not out at the edge of the row
