@@ -124,7 +124,11 @@ Tests and CI never contact Debian: `internal/images` and `internal/domain` are p
 
 ## Deployment
 
-Images are built by Nix, not by `Dockerfile`s:
+Runs on bilbo as the `sourceslist` app (`nixos/sourceslist.nix` in fnune/bilbo), from this flake's default package. To ship, push to `main`, then in bilbo run `nix flake update sourceslist` and rebuild.
+
+`nix build` puts all three binaries in `result/bin`: `web`, `ingest`, and `migrate`. The host runs `web` as a service and `ingest` on a timer, against its own Postgres. `ingest` applies migrations before it loads, so a fresh database is ready after its first run; `migrate` does the same without the download. `ingest` shells out to `pg_restore`, `createdb`, `dropdb`, and `psql`, so they must be on its `PATH`.
+
+The development stack runs the same binaries in images, also built by Nix rather than by `Dockerfile`s:
 
 ```sh
 nix build .#images-web      # 9.3 MB: the binary, CA certificates, a passwd entry
