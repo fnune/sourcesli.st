@@ -129,11 +129,8 @@ func NewServer(queries Queries, templates, assets fs.FS, logger *slog.Logger) (*
 	}, nil
 }
 
-// contentSecurityPolicy allows the page our own script and the one stylesheet
-// it inlines, by hash, and nothing else. Every byte the site serves is either
-// rendered here or mirrored from upstream, so a policy this narrow costs
-// nothing, and it means a thumbnail or a package description that slips some
-// markup through can at worst look wrong.
+// contentSecurityPolicy allows only our own script and the inlined stylesheet,
+// so markup that slips through from upstream data cannot run.
 func contentSecurityPolicy(stylesheet []byte) string {
 	digest := sha256.Sum256(stylesheet)
 	return strings.Join([]string{

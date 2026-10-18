@@ -22,10 +22,8 @@ const (
 	screenshotMaxBytes = 256 * 1024
 )
 
-// screenshotTypes are the raster formats a thumbnail may arrive in. The site
-// serves the stored bytes under their stored type from its own origin, so an
-// SVG, which can carry script, would turn anyone who uploads a screenshot
-// into an author of the site.
+// screenshotTypes leaves out SVG: it can carry script, and the site serves
+// screenshots from its own origin.
 var screenshotTypes = map[string]bool{
 	"image/png":  true,
 	"image/jpeg": true,
