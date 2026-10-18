@@ -8,6 +8,9 @@
 <meta name="color-scheme" content="light dark">
 <title>{{template "title" .}} &middot; sourcesli.st</title>
 <style>{{stylesheet}}</style>
+{{/* htmx would otherwise add a stylesheet of its own, which the content
+     security policy refuses, and nothing here needs it to evaluate code. */}}
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false}'>
 <script src="/assets/vendor/htmx.min.js" defer></script>
 </head>
 {{/*

@@ -2,6 +2,8 @@ package web_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"io"
 	"io/fs"
@@ -1011,5 +1013,39 @@ func TestSearchWorksWithoutJavaScript(t *testing.T) {
 	}
 	if !strings.Contains(body, `type="submit"`) {
 		t.Error("the search form must have a submit button")
+	}
+}
+
+func TestEveryResponseCarriesTheSecurityHeaders(t *testing.T) {
+	handler := newTestServer(t, populatedQueries())
+
+	for _, target := range []string{"/", "/assets/vendor/htmx.min.js", "/no/such/page"} {
+		request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, target, nil)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+
+		if got := recorder.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Errorf("%s: X-Content-Type-Options = %q, want nosniff", target, got)
+		}
+		if got := recorder.Header().Get("Content-Security-Policy"); !strings.Contains(got, "default-src 'none'") {
+			t.Errorf("%s: Content-Security-Policy = %q, want a default of none", target, got)
+		}
+	}
+}
+
+func TestTheContentSecurityPolicyAllowsTheInlinedStylesheet(t *testing.T) {
+	handler := newTestServer(t, populatedQueries())
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	inlined := regexp.MustCompile(`(?s)<style>(.*?)</style>`).FindSubmatch(recorder.Body.Bytes())
+	if inlined == nil {
+		t.Fatal("the page inlines no stylesheet")
+	}
+	digest := sha256.Sum256(inlined[1])
+	want := "style-src 'sha256-" + base64.StdEncoding.EncodeToString(digest[:]) + "'"
+	if policy := recorder.Header().Get("Content-Security-Policy"); !strings.Contains(policy, want) {
+		t.Errorf("Content-Security-Policy = %q, want it to contain %q", policy, want)
 	}
 }

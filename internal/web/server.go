@@ -5,6 +5,8 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"html/template"
@@ -71,6 +73,7 @@ type Server struct {
 	pages     map[string]*template.Template
 	fragments *template.Template
 	assets    http.Handler
+	policy    string
 	logger    *slog.Logger
 }
 
@@ -121,8 +124,29 @@ func NewServer(queries Queries, templates, assets fs.FS, logger *slog.Logger) (*
 		pages:     pages,
 		fragments: fragments,
 		assets:    http.StripPrefix("/assets/", http.FileServer(http.FS(assets))),
+		policy:    contentSecurityPolicy(stylesheet),
 		logger:    logger,
 	}, nil
+}
+
+// contentSecurityPolicy allows the page our own script and the one stylesheet
+// it inlines, by hash, and nothing else. Every byte the site serves is either
+// rendered here or mirrored from upstream, so a policy this narrow costs
+// nothing, and it means a thumbnail or a package description that slips some
+// markup through can at worst look wrong.
+func contentSecurityPolicy(stylesheet []byte) string {
+	digest := sha256.Sum256(stylesheet)
+	return strings.Join([]string{
+		"default-src 'none'",
+		"script-src 'self'",
+		"style-src 'sha256-" + base64.StdEncoding.EncodeToString(digest[:]) + "'",
+		"img-src 'self'",
+		"connect-src 'self'",
+		"font-src 'self'",
+		"base-uri 'none'",
+		"form-action 'self'",
+		"frame-ancestors 'none'",
+	}, "; ")
 }
 
 // Handler returns the routes. Go's pattern syntax carries the method, so a
@@ -139,7 +163,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /screenshots/{name}", s.handleScreenshot)
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.Handle("GET /assets/", s.assets)
-	return mux
+	return s.withSecurityHeaders(mux)
+}
+
+func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := w.Header()
+		header.Set("Content-Security-Policy", s.policy)
+		header.Set("X-Content-Type-Options", "nosniff")
+		header.Set("Referrer-Policy", "same-origin")
+		next.ServeHTTP(w, r)
+	})
 }
 
 type layoutData struct {
