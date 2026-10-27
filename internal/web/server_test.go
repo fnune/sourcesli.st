@@ -950,6 +950,22 @@ func TestHealthIsOkWhenNothingHasBeenIngested(t *testing.T) {
 	}
 }
 
+func TestRobotsTxtTurnsAwayAITrainingCrawlers(t *testing.T) {
+	t.Parallel()
+
+	response := get(t, newTestServer(t, populatedQueries()), "/robots.txt", nil)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
+	}
+	body := response.Body.String()
+	for _, want := range []string{"User-agent: GPTBot\nDisallow: /\n", "User-agent: ClaudeBot\nDisallow: /\n", "User-agent: *\nAllow: /\n"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("robots.txt does not contain %q", want)
+		}
+	}
+}
+
 func TestAssetsAreServed(t *testing.T) {
 	t.Parallel()
 

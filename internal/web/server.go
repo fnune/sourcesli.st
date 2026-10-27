@@ -159,6 +159,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /images", s.handleImagesMoved)
 	mux.HandleFunc("GET /screenshots/{name}", s.handleScreenshot)
 	mux.HandleFunc("GET /healthz", s.handleHealth)
+	mux.HandleFunc("GET /robots.txt", s.handleRobots)
 	mux.Handle("GET /assets/", s.assets)
 	return s.withSecurityHeaders(mux)
 }
@@ -890,6 +891,35 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, err := w.Write([]byte("ok\n")); err != nil {
 		s.logger.WarnContext(r.Context(), "writing the health response failed", slog.Any("error", err))
+	}
+}
+
+var aiTrainingCrawlers = []string{
+	"Amazonbot",
+	"anthropic-ai",
+	"Applebot-Extended",
+	"Bytespider",
+	"CCBot",
+	"ClaudeBot",
+	"Google-Extended",
+	"GPTBot",
+	"meta-externalagent",
+	"PerplexityBot",
+}
+
+func robotsTxt() string {
+	var b strings.Builder
+	for _, crawler := range aiTrainingCrawlers {
+		fmt.Fprintf(&b, "User-agent: %s\nDisallow: /\n\n", crawler)
+	}
+	b.WriteString("User-agent: *\nAllow: /\n")
+	return b.String()
+}
+
+func (s *Server) handleRobots(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	if _, err := w.Write([]byte(robotsTxt())); err != nil {
+		s.logger.WarnContext(r.Context(), "writing robots.txt failed", slog.Any("error", err))
 	}
 }
 
